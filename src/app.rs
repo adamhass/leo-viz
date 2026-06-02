@@ -3021,7 +3021,7 @@ impl eframe::App for App {
             .tabs
             .iter()
             .any(|tab| tab.slides.is_some() || tab.presentation_slide_number.is_some());
-        if !self.viewer.show_side_panel && ui_visible {
+        if !self.viewer.show_side_panel && (ui_visible || presentation_loaded) {
             egui::Area::new(egui::Id::new("settings_btn"))
                 .fixed_pos(egui::pos2(4.0, 4.0))
                 .order(egui::Order::Foreground)

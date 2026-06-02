@@ -1182,12 +1182,19 @@ fn iss_demo(v: &mut ViewerState) {
 }
 
 pub(crate) fn spacecomp_demo(v: &mut ViewerState) {
+    v.start_timestamp = spacecomp_demo_start_timestamp();
     v.tab_counter += 1;
     v.tabs.push(spacecomp_demo_tab(
         "SpaceCoMP".to_string(),
         "SpaceCoMP".to_string(),
         0.0,
     ));
+}
+
+fn spacecomp_demo_start_timestamp() -> chrono::DateTime<chrono::Utc> {
+    chrono::DateTime::parse_from_rfc3339("2026-06-03T11:02:27Z")
+        .expect("valid SpaceCoMP demo timestamp")
+        .with_timezone(&chrono::Utc)
 }
 
 fn spacecomp_demo_tab(name: String, title: String, time: f64) -> TabConfig {
@@ -1212,8 +1219,8 @@ fn spacecomp_demo_tab(name: String, title: String, time: f64) -> TabConfig {
         crate::math::lat_lon_to_matrix(8.5_f64.to_radians(), 15.0_f64.to_radians());
     tab.settings.zoom = 10000.0 / 2200.0;
     tab.settings.sat_radius = 2.0;
-    tab.settings.show_sat_border = true;
-    tab.settings.show_asc_desc_colors = false;
+    tab.settings.show_sat_border = false;
+    tab.settings.show_asc_desc_colors = true;
     tab.settings.color_links = egui::Color32::BLACK;
     tab.planet_counter += 1;
     let mut planet = PlanetConfig::new("Earth".to_string());
@@ -1295,6 +1302,7 @@ fn spacecomp_presentation_demo_tab(v: &mut ViewerState, slide_number: usize) {
         40 => torus_demo(v),
         41 => routing_demo(v),
         42 => {
+            v.start_timestamp = spacecomp_demo_start_timestamp();
             v.tab_counter += 1;
             v.tabs.push(spacecomp_demo_tab(
                 format!("Slide {}", slide_number),
