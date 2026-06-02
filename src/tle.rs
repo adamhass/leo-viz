@@ -341,6 +341,14 @@ impl TlePreset {
             .position(|p| std::mem::discriminant(p) == std::mem::discriminant(self))
             .unwrap_or(0)
     }
+
+    pub fn fallback_tle(&self) -> Option<&'static str> {
+        match self {
+            Self::Starlink => Some(include_str!("../assets/tle/starlink.tle")),
+            Self::OneWeb => Some(include_str!("../assets/tle/oneweb.tle")),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -425,6 +433,14 @@ pub fn parse_tle_data(data: &str) -> Result<Vec<TleSatellite>, String> {
     }
 }
 
+fn parse_fallback_tle_data(preset: TlePreset, reason: String) -> Result<Vec<TleSatellite>, String> {
+    let Some(data) = preset.fallback_tle() else {
+        return Err(reason);
+    };
+    parse_tle_data(data)
+        .map_err(|fallback_err| format!("{}; fallback failed: {}", reason, fallback_err))
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 fn tle_cache_dir() -> std::path::PathBuf {
     std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tle_cache")
@@ -477,6 +493,12 @@ pub fn fetch_tle_data(url: &str) -> Result<Vec<TleSatellite>, String> {
     let _ = std::fs::write(&cache_path, &body);
 
     parse_tle_data(&body)
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn fetch_tle_preset(preset: TlePreset) -> Result<Vec<TleSatellite>, String> {
+    fetch_tle_data(preset.url())
+        .or_else(|e| parse_fallback_tle_data(preset, format!("HTTP fetch failed: {}", e)))
 }
 
 const SATCAT_URL: &str = "https://celestrak.org/pub/satcat.csv";
@@ -652,6 +674,32 @@ pub(crate) async fn parse_tle_data_async(data: &str) -> Result<Vec<TleSatellite>
         Err("No valid TLE data found".to_string())
     } else {
         Ok(satellites)
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+async fn parse_fallback_tle_data_async(
+    preset: TlePreset,
+    reason: String,
+) -> Result<Vec<TleSatellite>, String> {
+    let Some(data) = preset.fallback_tle() else {
+        return Err(reason);
+    };
+    parse_tle_data_async(data)
+        .await
+        .map_err(|fallback_err| format!("{}; fallback failed: {}", reason, fallback_err))
+}
+
+#[cfg(target_arch = "wasm32")]
+pub(crate) async fn fetch_tle_preset_async(preset: TlePreset) -> Result<Vec<TleSatellite>, String> {
+    match fetch_tle_text(preset.url()).await {
+        Ok(text) => match parse_tle_data_async(&text).await {
+            Ok(satellites) => Ok(satellites),
+            Err(e) => {
+                parse_fallback_tle_data_async(preset, format!("TLE parse failed: {}", e)).await
+            }
+        },
+        Err(e) => parse_fallback_tle_data_async(preset, format!("HTTP fetch failed: {}", e)).await,
     }
 }
 

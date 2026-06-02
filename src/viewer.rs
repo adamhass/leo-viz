@@ -23,10 +23,8 @@ use crate::tile::TileOverlayState;
 use crate::time::{
     body_rotation_angle, continuous_day_of_year, DAYS_PER_YEAR, SOLAR_DECLINATION_MAX,
 };
-#[cfg(not(target_arch = "wasm32"))]
-use crate::tle::fetch_tle_data;
 #[cfg(target_arch = "wasm32")]
-use crate::tle::{fetch_tle_text, parse_tle_data_async, TLE_FETCH_RESULT};
+use crate::tle::TLE_FETCH_RESULT;
 use crate::tle::{
     mean_motion_to_altitude_km, TleLoadState, TlePreset, TleSatellite, TleShell, SECONDS_PER_DAY,
 };
@@ -2100,9 +2098,8 @@ impl ViewerState {
                                                         let _ = tx.send((preset_copy, result));
                                                     });
                                                 } else {
-                                                    let url = preset.url().to_string();
                                                     std::thread::spawn(move || {
-                                                        let result = fetch_tle_data(&url);
+                                                        let result = crate::tle::fetch_tle_preset(preset_copy);
                                                         let _ = tx.send((preset_copy, result));
                                                     });
                                                 }
@@ -2122,12 +2119,8 @@ impl ViewerState {
                                                         ctx.request_repaint();
                                                     });
                                                 } else {
-                                                    let url = preset.url().to_string();
                                                     wasm_bindgen_futures::spawn_local(async move {
-                                                        let result = match fetch_tle_text(&url).await {
-                                                            Ok(text) => parse_tle_data_async(&text).await,
-                                                            Err(e) => Err(e),
-                                                        };
+                                                        let result = crate::tle::fetch_tle_preset_async(preset_copy).await;
                                                         TLE_FETCH_RESULT.with(|cell| {
                                                             cell.borrow_mut().push((preset_copy, result));
                                                         });

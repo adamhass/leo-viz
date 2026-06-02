@@ -1464,9 +1464,8 @@ impl App {
                                 let _ = tx.send((preset_copy, result));
                             });
                         } else {
-                            let url = preset.url().to_string();
                             std::thread::spawn(move || {
-                                let result = crate::tle::fetch_tle_data(&url);
+                                let result = crate::tle::fetch_tle_preset(preset_copy);
                                 let _ = tx.send((preset_copy, result));
                             });
                         }
@@ -1483,12 +1482,8 @@ impl App {
                                 });
                             });
                         } else {
-                            let url = preset.url().to_string();
                             wasm_bindgen_futures::spawn_local(async move {
-                                let result = match crate::tle::fetch_tle_text(&url).await {
-                                    Ok(text) => crate::tle::parse_tle_data_async(&text).await,
-                                    Err(e) => Err(e),
-                                };
+                                let result = crate::tle::fetch_tle_preset_async(preset_copy).await;
                                 TLE_FETCH_RESULT.with(|cell| {
                                     cell.borrow_mut().push((preset_copy, result));
                                 });
