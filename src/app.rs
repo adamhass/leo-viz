@@ -2938,7 +2938,12 @@ impl eframe::App for App {
                         }
                     }
                 }
-                (c, j, k, i.key_pressed(egui::Key::Space))
+                (
+                    c,
+                    j || i.key_pressed(egui::Key::ArrowRight),
+                    k || i.key_pressed(egui::Key::ArrowLeft),
+                    i.key_pressed(egui::Key::Space),
+                )
             });
             if colon {
                 self.viewer.command_mode = true;
