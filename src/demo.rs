@@ -1279,7 +1279,7 @@ impl Presentation {
                 spacecomp_slide_tabs(
                     v,
                     crate::slides::SPACECOMP_PRIMER,
-                    43..crate::slides::total_slide_count() + 1,
+                    41..crate::slides::total_slide_count() + 1,
                 );
             }
         }
