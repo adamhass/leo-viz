@@ -488,26 +488,6 @@ impl ViewerState {
         Some(deck.uri(deck.current.min(deck.len() - 1)))
     }
 
-    fn presentation_slide_window_progress(&self) -> (usize, usize) {
-        const PRELOAD_BEHIND_TABS: usize = 4;
-        const PRELOAD_AHEAD_TABS: usize = 18;
-
-        let mut loaded = 0;
-        let mut total = 0;
-        let start = self.active_tab_idx.saturating_sub(PRELOAD_BEHIND_TABS);
-        let end = (self.active_tab_idx + PRELOAD_AHEAD_TABS + 1).min(self.tabs.len());
-        for tab_idx in start..end {
-            let Some(uri) = self.presentation_slide_uri_for_tab(tab_idx) else {
-                continue;
-            };
-            total += 1;
-            if self.slide_textures.contains_key(&uri) {
-                loaded += 1;
-            }
-        }
-        (loaded, total)
-    }
-
     pub(crate) fn preload_presentation_slides(&mut self, ctx: &egui::Context) {
         const PRELOAD_BEHIND_TABS: usize = 4;
         const PRELOAD_AHEAD_TABS: usize = 18;
@@ -1140,29 +1120,7 @@ impl ViewerState {
             });
         });
 
-        let (loaded, slide_total) = self.presentation_slide_window_progress();
-        if loaded < slide_total {
-            let overlay_size = egui::vec2(220.0, 42.0);
-            let overlay_rect = egui::Rect::from_min_size(
-                avail.right_top() + egui::vec2(-overlay_size.x - 16.0, 16.0),
-                overlay_size,
-            );
-            ui.scope_builder(egui::UiBuilder::new().max_rect(overlay_rect), |ui| {
-                egui::Frame::popup(ui.style())
-                    .fill(ui.visuals().panel_fill.gamma_multiply(0.92))
-                    .show(ui, |ui| {
-                        ui.set_width(overlay_size.x - 16.0);
-                        ui.label(format!("{loaded}/{slide_total} nearby slides ready"));
-                        let progress = if slide_total == 0 {
-                            0.0
-                        } else {
-                            loaded as f32 / slide_total as f32
-                        };
-                        ui.add(
-                            egui::ProgressBar::new(progress).desired_width(ui.available_width()),
-                        );
-                    });
-            });
+        if !self.slide_textures.contains_key(&uri) {
             ui.ctx().request_repaint();
         }
     }
