@@ -4935,6 +4935,9 @@ impl ViewerState {
 
         #[cfg(target_arch = "wasm32")]
         {
+            if !self.pending_planet_texture_fetches.insert(key) {
+                return;
+            }
             let ctx = ctx.clone();
             let filename = filename.to_string();
             wasm_bindgen_futures::spawn_local(async move {

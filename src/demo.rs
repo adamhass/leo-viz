@@ -1437,6 +1437,19 @@ impl App {
         self.viewer.texture_resolution = TextureResolution::R4096;
         self.viewer.planet_image_handles.clear();
         self.setup_tabs(|v| presentation.build(v));
+        let presentation_bodies: Vec<_> = self
+            .viewer
+            .tabs
+            .iter()
+            .flat_map(|tab| {
+                tab.planets
+                    .iter()
+                    .map(|planet| (planet.celestial_body, planet.skin))
+            })
+            .collect();
+        for (body, skin) in presentation_bodies {
+            self.viewer.load_texture_for_body(body, skin, ctx);
+        }
         match presentation {
             Presentation::SpaceCoMP => {
                 crate::slides::warm_browser_cache(crate::slides::SPACECOMP_PRIMER)
@@ -1492,7 +1505,8 @@ impl App {
         let mut fetched = std::collections::HashSet::new();
         for tab in &mut v.tabs {
             for planet in &mut tab.planets {
-                for (preset, (selected, state, _shells)) in &mut planet.tle_selections {
+                let auto_cluster = planet.auto_cluster_tle;
+                for (preset, (selected, state, shells)) in &mut planet.tle_selections {
                     if !*selected {
                         continue;
                     }
@@ -1500,6 +1514,12 @@ impl App {
                         *state = TleLoadState::Loaded {
                             satellites: cached_sats.clone(),
                         };
+                        if auto_cluster && shells.is_none() {
+                            *shells = Some(crate::tle::cluster_tle_shells(
+                                cached_sats,
+                                preset.color_index(),
+                            ));
+                        }
                         continue;
                     }
                     if !matches!(state, TleLoadState::NotLoaded) {

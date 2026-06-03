@@ -1004,57 +1004,10 @@ impl eframe::App for App {
                             };
                             if auto_cluster {
                                 if let TleLoadState::Loaded { satellites } = state {
-                                    let n = satellites.len();
-                                    let (inc_bin_size, alt_bin_size) = if n < 50 {
-                                        (1.0, 10.0)
-                                    } else if n < 500 {
-                                        (5.0, 50.0)
-                                    } else {
-                                        (5.0, 100.0)
-                                    };
-                                    let mut groups: std::collections::HashMap<
-                                        (i32, i32),
-                                        Vec<usize>,
-                                    > = std::collections::HashMap::new();
-                                    for (i, sat) in satellites.iter().enumerate() {
-                                        let alt =
-                                            crate::tle::mean_motion_to_altitude_km(sat.mean_motion);
-                                        let inc_bin = (sat.inclination_deg / inc_bin_size).round()
-                                            as i32
-                                            * inc_bin_size as i32;
-                                        let alt_bin = (alt / alt_bin_size).round() as i32
-                                            * alt_bin_size as i32;
-                                        groups.entry((inc_bin, alt_bin)).or_default().push(i);
-                                    }
-                                    let mut sorted: Vec<_> = groups.into_iter().collect();
-                                    sorted.sort_by(|a, b| b.1.len().cmp(&a.1.len()));
-                                    let min_sats = if n < 50 { 1 } else { (n / 50).max(10) };
-                                    let base_color = preset.color_index();
-                                    let mut new_shells = Vec::new();
-                                    let mut other_indices = Vec::new();
-                                    let mut co_counter: usize = 0;
-                                    for ((inc, alt), indices) in sorted {
-                                        if indices.len() < min_sats {
-                                            other_indices.extend(indices);
-                                            continue;
-                                        }
-                                        new_shells.push(crate::tle::TleShell {
-                                            label: format!("{}°/{}km", inc, alt),
-                                            satellite_indices: indices,
-                                            color_offset: base_color + co_counter,
-                                            selected: true,
-                                        });
-                                        co_counter += 1;
-                                    }
-                                    if !other_indices.is_empty() {
-                                        new_shells.push(crate::tle::TleShell {
-                                            label: "Other".to_string(),
-                                            satellite_indices: other_indices,
-                                            color_offset: base_color + co_counter,
-                                            selected: true,
-                                        });
-                                    }
-                                    *shells = Some(new_shells);
+                                    *shells = Some(crate::tle::cluster_tle_shells(
+                                        satellites,
+                                        preset.color_index(),
+                                    ));
                                 }
                             }
                         }
@@ -1821,6 +1774,7 @@ impl eframe::App for App {
         TEXTURE_RESULT.with(|cell| {
             let results: Vec<_> = cell.borrow_mut().drain(..).collect();
             for (key, result) in results {
+                v.pending_planet_texture_fetches.remove(&key);
                 match result {
                     Ok(mut texture) => {
                         if let Some(ref rs) = v.render_state {
@@ -1888,12 +1842,22 @@ impl eframe::App for App {
                 for (preset, result) in cell.borrow_mut().drain(..) {
                     for tab in &mut v.tabs {
                         for planet in &mut tab.planets {
-                            if let Some((_, state, _)) = planet.tle_selections.get_mut(&preset) {
+                            let auto_cluster = planet.auto_cluster_tle;
+                            if let Some((_, state, shells)) = planet.tle_selections.get_mut(&preset)
+                            {
                                 if matches!(state, TleLoadState::Loading) {
                                     *state = match result.clone() {
                                         Ok(satellites) => TleLoadState::Loaded { satellites },
                                         Err(e) => TleLoadState::Failed(e),
                                     };
+                                    if auto_cluster {
+                                        if let TleLoadState::Loaded { satellites } = state {
+                                            *shells = Some(crate::tle::cluster_tle_shells(
+                                                satellites,
+                                                preset.color_index(),
+                                            ));
+                                        }
+                                    }
                                 }
                             }
                         }

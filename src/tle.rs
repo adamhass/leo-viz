@@ -369,6 +369,53 @@ pub struct TleShell {
     pub selected: bool,
 }
 
+pub fn cluster_tle_shells(satellites: &[TleSatellite], base_color: usize) -> Vec<TleShell> {
+    let n = satellites.len();
+    let (inc_bin_size, alt_bin_size) = if n < 50 {
+        (1.0, 10.0)
+    } else if n < 500 {
+        (5.0, 50.0)
+    } else {
+        (5.0, 100.0)
+    };
+    let mut groups: std::collections::HashMap<(i32, i32), Vec<usize>> =
+        std::collections::HashMap::new();
+    for (i, sat) in satellites.iter().enumerate() {
+        let alt = mean_motion_to_altitude_km(sat.mean_motion);
+        let inc_bin = (sat.inclination_deg / inc_bin_size).round() as i32 * inc_bin_size as i32;
+        let alt_bin = (alt / alt_bin_size).round() as i32 * alt_bin_size as i32;
+        groups.entry((inc_bin, alt_bin)).or_default().push(i);
+    }
+    let mut sorted: Vec<_> = groups.into_iter().collect();
+    sorted.sort_by(|a, b| b.1.len().cmp(&a.1.len()));
+    let min_sats = if n < 50 { 1 } else { (n / 50).max(10) };
+    let mut shells = Vec::new();
+    let mut other_indices = Vec::new();
+    let mut co_counter: usize = 0;
+    for ((inc, alt), indices) in sorted {
+        if indices.len() < min_sats {
+            other_indices.extend(indices);
+            continue;
+        }
+        shells.push(TleShell {
+            label: format!("{}°/{}km", inc, alt),
+            satellite_indices: indices,
+            color_offset: base_color + co_counter,
+            selected: true,
+        });
+        co_counter += 1;
+    }
+    if !other_indices.is_empty() {
+        shells.push(TleShell {
+            label: "Other".to_string(),
+            satellite_indices: other_indices,
+            color_offset: base_color + co_counter,
+            selected: true,
+        });
+    }
+    shells
+}
+
 #[derive(Clone)]
 #[allow(dead_code)]
 pub enum TleLoadState {
