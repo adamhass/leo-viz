@@ -273,7 +273,6 @@ pub(crate) struct ViewerState {
     pub(crate) tabs: Vec<TabConfig>,
     pub(crate) camera_id_counter: usize,
     pub(crate) tab_counter: usize,
-    pub(crate) torus_zoom: f64,
     pub(crate) planet_textures:
         HashMap<(CelestialBody, Skin, TextureResolution), Arc<EarthTexture>>,
     pub(crate) ring_textures: HashMap<CelestialBody, Arc<RingTexture>>,
@@ -3992,7 +3991,6 @@ impl ViewerState {
         let planet_handle = self
             .planet_image_handles
             .get(&(celestial_body, skin, tex_res));
-        let torus_zoom = self.torus_zoom;
         let link_width = settings.link_width;
         let fixed_sizes = settings.fixed_sizes;
         let show_sat_border = settings.show_sat_border;
@@ -4555,6 +4553,7 @@ impl ViewerState {
                                 roll_mat * base
                             }
                         };
+                        let shared_zoom = self.tabs[tab_idx].settings.zoom;
                         let planet = &mut self.tabs[tab_idx].planets[planet_idx];
                         let rad_grid: Option<&crate::igrf::IgrfRadGrid> = None;
                         let (trot, tzoom) = draw_torus(
@@ -4569,7 +4568,7 @@ impl ViewerState {
                             show_links,
                             show_orbits,
                             single_color,
-                            torus_zoom,
+                            shared_zoom,
                             &mut planet.satellite_cameras,
                             show_routing_paths,
                             show_manhattan_path,
@@ -4600,7 +4599,7 @@ impl ViewerState {
                                 nalgebra::Matrix3::new(c, s, 0.0, -s, c, 0.0, 0.0, 0.0, 1.0);
                             self.tabs[tab_idx].settings.rotation = roll_inv * trot;
                         }
-                        self.torus_zoom = tzoom;
+                        self.tabs[tab_idx].settings.zoom = tzoom;
                     });
                 }
 
