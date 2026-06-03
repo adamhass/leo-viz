@@ -516,6 +516,14 @@ impl ViewerState {
         self.slide_texture_preloads
             .retain(|uri| retain_uris.contains(uri));
 
+        if self
+            .tabs
+            .get(self.active_tab_idx)
+            .is_some_and(|tab| !tab.planets.is_empty())
+        {
+            return;
+        }
+
         let preload_start = self.active_tab_idx.saturating_sub(PRELOAD_BEHIND_TABS);
         let preload_end = (self.active_tab_idx + PRELOAD_AHEAD_TABS + 1).min(self.tabs.len());
         let mut new_preloads_this_frame = 0;

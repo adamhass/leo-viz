@@ -807,7 +807,11 @@ impl eframe::App for App {
         let bodies_needed: Vec<(CelestialBody, Skin, TextureResolution)> = {
             let mut seen = std::collections::HashSet::new();
             let tabs: Vec<_> = if presentation_loaded {
-                v.tabs.get(active_tab_idx).into_iter().collect()
+                const PRELOAD_BEHIND_TABS: usize = 4;
+                const PRELOAD_AHEAD_TABS: usize = 10;
+                let start = active_tab_idx.saturating_sub(PRELOAD_BEHIND_TABS);
+                let end = (active_tab_idx + PRELOAD_AHEAD_TABS + 1).min(v.tabs.len());
+                v.tabs[start..end].iter().collect()
             } else {
                 v.tabs.iter().collect()
             };
