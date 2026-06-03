@@ -280,7 +280,7 @@ pub(crate) fn decode_jpeg_pixels(bytes: &[u8]) -> Option<(Vec<[u8; 3]>, u32, u32
 pub(crate) fn load_earth_texture() -> EarthTexture {
     #[cfg(not(target_arch = "wasm32"))]
     {
-        EarthTexture::load_from_path(&asset_path("textures/earth/earth_8k.jpg"))
+        EarthTexture::load_from_path(&asset_path("textures/earth/earth_2k.jpg"))
     }
     #[cfg(target_arch = "wasm32")]
     {

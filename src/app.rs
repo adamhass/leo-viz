@@ -242,13 +242,7 @@ impl App {
         crate::slides::install(&cc.egui_ctx);
 
         let render_state = cc.wgpu_render_state.clone();
-        let default_texture_resolution = if cfg!(target_arch = "wasm32") {
-            TextureResolution::R4096
-        } else if render_state.is_some() {
-            TextureResolution::R8192
-        } else {
-            TextureResolution::R512
-        };
+        let default_texture_resolution = TextureResolution::R2048;
 
         if let Some(ref rs) = render_state {
             let gpu = GpuResources::new(&rs.device, &rs.queue, rs.target_format);
@@ -260,19 +254,11 @@ impl App {
         let (tle_fetch_tx, tle_fetch_rx) = mpsc::channel();
 
         if let Some(ref rs) = render_state {
-            let builtin_key = if cfg!(target_arch = "wasm32") {
-                (
-                    CelestialBody::Earth,
-                    Skin::Default,
-                    TextureResolution::R4096,
-                )
-            } else {
-                (
-                    CelestialBody::Earth,
-                    Skin::Default,
-                    TextureResolution::R8192,
-                )
-            };
+            let builtin_key = (
+                CelestialBody::Earth,
+                Skin::Default,
+                default_texture_resolution,
+            );
             let mut wr = rs.renderer.write();
             if let Some(gpu) = wr.callback_resources.get_mut::<GpuResources>() {
                 gpu.upload_texture(&rs.device, &rs.queue, builtin_key, &builtin_texture);
@@ -286,7 +272,6 @@ impl App {
                 tabs: vec![TabConfig::new("View 1".to_string())],
                 camera_id_counter: 0,
                 tab_counter: 1,
-                torus_zoom: 1.0,
                 planet_textures: {
                     let mut map = HashMap::new();
                     #[cfg(not(target_arch = "wasm32"))]
@@ -294,7 +279,7 @@ impl App {
                         let builtin_key = (
                             CelestialBody::Earth,
                             Skin::Default,
-                            TextureResolution::R8192,
+                            default_texture_resolution,
                         );
                         map.insert(builtin_key, builtin_texture.clone());
                     }
@@ -808,7 +793,7 @@ impl eframe::App for App {
             let mut seen = std::collections::HashSet::new();
             let tabs: Vec<_> = if presentation_loaded {
                 const PRELOAD_BEHIND_TABS: usize = 4;
-                const PRELOAD_AHEAD_TABS: usize = 10;
+                const PRELOAD_AHEAD_TABS: usize = 18;
                 let start = active_tab_idx.saturating_sub(PRELOAD_BEHIND_TABS);
                 let end = (active_tab_idx + PRELOAD_AHEAD_TABS + 1).min(v.tabs.len());
                 v.tabs[start..end].iter().collect()

@@ -1,6 +1,6 @@
 //! Demo mode setup with pre-configured multi-tab constellation layouts.
 
-use crate::celestial::CelestialBody;
+use crate::celestial::{CelestialBody, TextureResolution};
 use crate::config::{
     AoiJobMode, AreaOfInterest, ConstellationConfig, GroundStation, PlanetConfig, Preset, TabConfig,
 };
@@ -1388,6 +1388,8 @@ fn spacecomp_slides_tab(v: &mut ViewerState, deck: crate::slides::SlideDeck, nam
 
 impl App {
     pub(crate) fn setup_demo(&mut self) {
+        self.viewer.texture_resolution = TextureResolution::R2048;
+        self.viewer.planet_image_handles.clear();
         self.setup_tabs(|v| {
             // Orbit fundamentals
             inclination_demo(v);
@@ -1432,6 +1434,8 @@ impl App {
         presentation: Presentation,
         ctx: &eframe::egui::Context,
     ) {
+        self.viewer.texture_resolution = TextureResolution::R4096;
+        self.viewer.planet_image_handles.clear();
         self.setup_tabs(|v| presentation.build(v));
         match presentation {
             Presentation::SpaceCoMP => {
