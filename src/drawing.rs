@@ -2835,7 +2835,7 @@ pub fn draw_3d_view(
             let base_link_color = if show_routing_paths || show_asc_desc_colors {
                 color_links
             } else {
-                egui::Color32::from_rgb(95, 115, 130)
+                egui::Color32::from_rgb(150, 150, 150)
             };
             let link_dim = egui::Color32::from_rgba_unmultiplied(50, 50, 60, 80);
             let cursor_over_plot = plot_ui.pointer_coordinate().is_some();
