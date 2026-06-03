@@ -1125,34 +1125,6 @@ impl ViewerState {
         ui.painter()
             .rect_filled(avail, 0.0, ui.visuals().panel_fill);
 
-        if !self.slide_textures.contains_key(&uri) {
-            let (loaded, slide_total) = self.presentation_slide_window_progress();
-            ui.scope_builder(egui::UiBuilder::new().max_rect(avail), |ui| {
-                ui.centered_and_justified(|ui| {
-                    ui.vertical_centered(|ui| {
-                        ui.add_space(8.0);
-                        ui.heading("Loading slides");
-                        ui.add_space(8.0);
-                        if slide_total > 0 {
-                            ui.label(format!("{loaded}/{slide_total} nearby slides ready"));
-                        }
-                        ui.add_space(8.0);
-                        let progress = if slide_total == 0 {
-                            0.0
-                        } else {
-                            loaded as f32 / slide_total as f32
-                        };
-                        ui.add(
-                            egui::ProgressBar::new(progress)
-                                .desired_width((avail.width() * 0.35).clamp(220.0, 520.0)),
-                        );
-                    });
-                });
-            });
-            ui.ctx().request_repaint();
-            return;
-        }
-
         ui.scope_builder(egui::UiBuilder::new().max_rect(avail), |ui| {
             ui.centered_and_justified(|ui| {
                 let image = if let Some(texture) = self.slide_textures.get(&uri) {
@@ -1167,6 +1139,32 @@ impl ViewerState {
                 );
             });
         });
+
+        let (loaded, slide_total) = self.presentation_slide_window_progress();
+        if loaded < slide_total {
+            let overlay_size = egui::vec2(220.0, 42.0);
+            let overlay_rect = egui::Rect::from_min_size(
+                avail.right_top() + egui::vec2(-overlay_size.x - 16.0, 16.0),
+                overlay_size,
+            );
+            ui.scope_builder(egui::UiBuilder::new().max_rect(overlay_rect), |ui| {
+                egui::Frame::popup(ui.style())
+                    .fill(ui.visuals().panel_fill.gamma_multiply(0.92))
+                    .show(ui, |ui| {
+                        ui.set_width(overlay_size.x - 16.0);
+                        ui.label(format!("{loaded}/{slide_total} nearby slides ready"));
+                        let progress = if slide_total == 0 {
+                            0.0
+                        } else {
+                            loaded as f32 / slide_total as f32
+                        };
+                        ui.add(
+                            egui::ProgressBar::new(progress).desired_width(ui.available_width()),
+                        );
+                    });
+            });
+            ui.ctx().request_repaint();
+        }
     }
 
     fn render_planet_ui(
