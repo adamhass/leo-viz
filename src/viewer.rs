@@ -344,6 +344,8 @@ pub(crate) struct ViewerState {
     pub(crate) solar_system_handles: HashMap<CelestialBody, egui::TextureHandle>,
     pub(crate) planet_sizes_handles: HashMap<CelestialBody, egui::TextureHandle>,
     pub(crate) slide_textures: HashMap<String, egui::load::SizedTexture>,
+    pub(crate) slide_texture_preloads: std::collections::HashSet<String>,
+    pub(crate) slide_preload_started: bool,
     pub(crate) slide_texture_size: Option<egui::Vec2>,
     pub(crate) ss_last_render_instant: Option<web_time::Instant>,
     pub(crate) planet_sizes_t: f64,
@@ -478,10 +480,28 @@ impl TabViewer for ViewerState {
 }
 
 impl ViewerState {
+    pub(crate) fn presentation_slide_load_progress(&self) -> (usize, usize) {
+        let mut loaded = 0;
+        let mut total = 0;
+        for tab in &self.tabs {
+            let Some(deck) = tab.slides.as_ref() else {
+                continue;
+            };
+            if deck.len() == 0 {
+                continue;
+            }
+
+            total += 1;
+            let uri = deck.uri(deck.current.min(deck.len() - 1));
+            if self.slide_textures.contains_key(&uri) {
+                loaded += 1;
+            }
+        }
+        (loaded, total)
+    }
+
     pub(crate) fn preload_presentation_slides(&mut self, ctx: &egui::Context) {
-        const PRELOAD_BEHIND_TABS: usize = 4;
-        const PRELOAD_AHEAD_TABS: usize = 20;
-        const PRELOADS_PER_FRAME: usize = 2;
+        const NEW_PRELOADS_PER_FRAME: usize = 16;
 
         let size = ctx.content_rect().size();
         if self
@@ -489,16 +509,15 @@ impl ViewerState {
             .is_some_and(|old| (old.x - size.x).abs() > 32.0 || (old.y - size.y).abs() > 32.0)
         {
             self.slide_textures.clear();
+            self.slide_texture_preloads.clear();
         }
         self.slide_texture_size = Some(size);
 
         let size = egui::vec2(size.x.max(1.0), size.y.max(1.0));
-        let preload_start = self.active_tab_idx.saturating_sub(PRELOAD_BEHIND_TABS);
-        let preload_end = (self.active_tab_idx + PRELOAD_AHEAD_TABS + 1).min(self.tabs.len());
-
-        let mut attempts_this_frame = 0;
-        for preload_idx in preload_start..preload_end {
-            let Some(deck) = self.tabs[preload_idx].slides.as_ref() else {
+        let mut new_preloads_this_frame = 0;
+        let mut pending = false;
+        for tab in &self.tabs {
+            let Some(deck) = tab.slides.as_ref() else {
                 continue;
             };
             if deck.len() == 0 {
@@ -510,17 +529,25 @@ impl ViewerState {
                 continue;
             }
 
-            if let Some(texture) = crate::slides::load_uri_texture(ctx, &uri, size) {
-                self.slide_textures.insert(uri, texture);
+            let already_requested = self.slide_texture_preloads.contains(&uri);
+            if !already_requested && new_preloads_this_frame >= NEW_PRELOADS_PER_FRAME {
+                pending = true;
+                continue;
+            }
+            if !already_requested {
+                self.slide_texture_preloads.insert(uri.clone());
+                new_preloads_this_frame += 1;
             }
 
-            attempts_this_frame += 1;
-            if attempts_this_frame >= PRELOADS_PER_FRAME {
-                break;
+            if let Some(texture) = crate::slides::load_uri_texture(ctx, &uri, size) {
+                self.slide_texture_preloads.remove(&uri);
+                self.slide_textures.insert(uri, texture);
+            } else {
+                pending = true;
             }
         }
 
-        if attempts_this_frame > 0 {
+        if pending || new_preloads_this_frame > 0 {
             ctx.request_repaint();
         }
     }
@@ -1076,14 +1103,35 @@ impl ViewerState {
         let uri = deck.uri(current);
 
         let avail = ui.available_rect_before_wrap();
-        if !self.slide_textures.contains_key(&uri) {
-            if let Some(texture) = crate::slides::load_uri_texture(ui.ctx(), &uri, avail.size()) {
-                self.slide_textures.insert(uri.clone(), texture);
-            }
-        }
-
         ui.painter()
             .rect_filled(avail, 0.0, ui.visuals().panel_fill);
+
+        let (loaded, slide_total) = self.presentation_slide_load_progress();
+        if loaded < slide_total {
+            ui.scope_builder(egui::UiBuilder::new().max_rect(avail), |ui| {
+                ui.centered_and_justified(|ui| {
+                    ui.vertical_centered(|ui| {
+                        ui.add_space(8.0);
+                        ui.heading("Loading slides");
+                        ui.add_space(8.0);
+                        ui.label(format!("{loaded}/{slide_total}"));
+                        ui.add_space(8.0);
+                        let progress = if slide_total == 0 {
+                            0.0
+                        } else {
+                            loaded as f32 / slide_total as f32
+                        };
+                        ui.add(
+                            egui::ProgressBar::new(progress)
+                                .desired_width((avail.width() * 0.35).clamp(220.0, 520.0)),
+                        );
+                    });
+                });
+            });
+            ui.ctx().request_repaint();
+            return;
+        }
+
         ui.scope_builder(egui::UiBuilder::new().max_rect(avail), |ui| {
             ui.centered_and_justified(|ui| {
                 let image = if let Some(texture) = self.slide_textures.get(&uri) {

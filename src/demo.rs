@@ -1398,6 +1398,8 @@ impl App {
         }
         self.viewer.show_side_panel = false;
         self.viewer.slide_textures.clear();
+        self.viewer.slide_texture_preloads.clear();
+        self.viewer.slide_preload_started = false;
         self.viewer.slide_texture_size = None;
         ctx.request_repaint();
     }

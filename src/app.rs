@@ -509,6 +509,8 @@ impl App {
                 solar_system_handles: HashMap::new(),
                 planet_sizes_handles: HashMap::new(),
                 slide_textures: HashMap::new(),
+                slide_texture_preloads: std::collections::HashSet::new(),
+                slide_preload_started: false,
                 slide_texture_size: None,
                 ss_last_render_instant: None,
                 planet_sizes_t: 0.0,
@@ -785,7 +787,12 @@ impl eframe::App for App {
             .iter()
             .any(|tab| tab.slides.is_some() || tab.presentation_slide_number.is_some());
         if presentation_loaded {
-            v.preload_presentation_slides(ctx);
+            if v.slide_preload_started {
+                v.preload_presentation_slides(ctx);
+            } else {
+                v.slide_preload_started = true;
+                ctx.request_repaint();
+            }
         }
 
         let tex_res = v.texture_resolution;
