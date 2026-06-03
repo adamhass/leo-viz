@@ -888,6 +888,7 @@ fn oneweb_tle_demo(v: &mut ViewerState) {
     cons.inclination = 87.9;
     cons.walker_type = WalkerType::Star;
     cons.phasing = 1.0;
+    cons.raan_offset = 38.0;
     planet_sim.constellations.push(cons);
     tab.planets.push(planet_sim);
 
