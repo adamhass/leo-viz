@@ -464,12 +464,11 @@ fn routing_demo(v: &mut ViewerState) {
     let mut tab = TabConfig::new_empty("ISL Routing".to_string());
     tab.title = "ISL Routing".to_string();
     tab.description = indoc::indoc! {"
-            Two satellites (Src and Dst) with two different routing paths drawn between them.
+            Two satellites (Src and Dst) with the shortest routing path drawn between them.
 
             **Routing** is the choice of which ISL hops a packet takes from source to destination.
 
-            • **Manhattan** (shown in **red**) routing walks along the constellation grid in two phases (cross-plane then in-plane). It's simple and fast to compute, but may take more hops than necessary.
-            • **Shortest-path** (shown in **green**) routing (Dijkstra) finds the fewest-hop route through the link graph. It's optimal but costlier to compute.
+            **Shortest-path** routing (Dijkstra) finds the fewest-hop route through the link graph.
 
             Satellites are coloured by whether they are currently ascending or descending, which matters because grid topology breaks at the seams where adjacent planes are counter-rotating.
         "}.to_string();
@@ -478,7 +477,7 @@ fn routing_demo(v: &mut ViewerState) {
     tab.settings.show_links = true;
     tab.settings.show_orbits = false;
     tab.settings.show_routing_paths = true;
-    tab.settings.show_manhattan_path = true;
+    tab.settings.show_manhattan_path = false;
     tab.settings.show_shortest_path = true;
     tab.settings.routing_width = 3.0;
     tab.settings.routing_node_scale = 1.0;
