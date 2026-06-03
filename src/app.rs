@@ -3032,13 +3032,26 @@ impl eframe::App for App {
                         if response.clicked() {
                             self.viewer.show_side_panel = true;
                         }
-                        if response.hovered() {
-                            let button_response =
-                                ui.put(response.rect, egui::Button::new("+").small());
-                            if button_response.clicked() {
-                                self.viewer.show_side_panel = true;
-                            }
-                        }
+                        let visuals = ui.style().interact_selectable(&response, false);
+                        let text_color = if response.hovered() {
+                            visuals.text_color()
+                        } else {
+                            egui::Color32::TRANSPARENT
+                        };
+                        ui.painter().rect(
+                            response.rect,
+                            2.0,
+                            visuals.bg_fill,
+                            visuals.bg_stroke,
+                            egui::StrokeKind::Outside,
+                        );
+                        ui.painter().text(
+                            response.rect.center(),
+                            egui::Align2::CENTER_CENTER,
+                            "+",
+                            egui::FontId::proportional(13.0),
+                            text_color,
+                        );
                     } else if ui.small_button("+").clicked() {
                         self.viewer.show_side_panel = true;
                     }
