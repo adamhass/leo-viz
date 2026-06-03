@@ -820,8 +820,8 @@ fn planet_sizes_demo(v: &mut ViewerState) {
 
 fn starlink_tle_demo(v: &mut ViewerState) {
     v.tab_counter += 1;
-    let mut tab = TabConfig::new_empty("Starlink: Simulated vs Real".to_string());
-    tab.title = "Starlink: Simulated vs Real".to_string();
+    let mut tab = TabConfig::new_empty("Starlink: Simulated vs TLE".to_string());
+    tab.title = "Starlink: Simulated vs TLE".to_string();
     tab.description = indoc::indoc! {"
             An idealised Walker Delta simulation of Starlink (left) compared to the real constellation propagated from live TLE data (right).
 
@@ -1319,6 +1319,47 @@ fn spacecomp_presentation_demo_tab(v: &mut ViewerState, slide_number: usize) {
         tab.title = String::new();
         tab.description = String::new();
         tab.presentation_slide_number = Some(slide_number);
+        apply_spacecomp_presentation_labels(tab, slide_number);
+    }
+}
+
+fn apply_spacecomp_presentation_labels(tab: &mut TabConfig, slide_number: usize) {
+    match slide_number {
+        35 => set_planet_names(tab, &["90° inclination", "60° inclination"]),
+        36 => set_planet_names(tab, &["Walker Star", "Walker Delta"]),
+        37 => set_planet_names(tab, &["OneWeb model", "OneWeb TLE"]),
+        38 => set_planet_names(tab, &["Starlink model", "Starlink TLE"]),
+        39 => set_planet_names(tab, &["4-neighbor ISLs", "8-neighbor ISLs"]),
+        40 => set_planet_names(tab, &["Torus topology"]),
+        41 => {
+            set_planet_names(tab, &["ISL routing"]);
+            if let Some(planet) = tab.planets.first_mut() {
+                if let Some(camera) = planet.satellite_cameras.get_mut(0) {
+                    camera.label = "Source".to_string();
+                }
+                if let Some(camera) = planet.satellite_cameras.get_mut(1) {
+                    camera.label = "Destination".to_string();
+                }
+            }
+        }
+        42 => {
+            set_planet_names(tab, &["SpaceCoMP job"]);
+            if let Some(planet) = tab.planets.first_mut() {
+                if let Some(ground_station) = planet.ground_stations.first_mut() {
+                    ground_station.name = "Ground station".to_string();
+                }
+                if let Some(aoi) = planet.areas_of_interest.first_mut() {
+                    aoi.name = "AOI".to_string();
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+fn set_planet_names(tab: &mut TabConfig, names: &[&str]) {
+    for (planet, name) in tab.planets.iter_mut().zip(names) {
+        planet.name = (*name).to_string();
     }
 }
 

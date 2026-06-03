@@ -3845,7 +3845,7 @@ pub fn draw_3d_view(
                                         push_label(
                                             &mut spacecomp_role_labels,
                                             s,
-                                            "Line of Sight",
+                                            "Downlink relay",
                                             color_gs,
                                         );
                                     }
