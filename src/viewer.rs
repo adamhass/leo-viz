@@ -480,19 +480,27 @@ impl TabViewer for ViewerState {
 }
 
 impl ViewerState {
-    pub(crate) fn presentation_slide_load_progress(&self) -> (usize, usize) {
+    fn presentation_slide_uri_for_tab(&self, tab_idx: usize) -> Option<String> {
+        let deck = self.tabs.get(tab_idx)?.slides.as_ref()?;
+        if deck.len() == 0 {
+            return None;
+        }
+        Some(deck.uri(deck.current.min(deck.len() - 1)))
+    }
+
+    fn presentation_slide_window_progress(&self) -> (usize, usize) {
+        const PRELOAD_BEHIND_TABS: usize = 4;
+        const PRELOAD_AHEAD_TABS: usize = 18;
+
         let mut loaded = 0;
         let mut total = 0;
-        for tab in &self.tabs {
-            let Some(deck) = tab.slides.as_ref() else {
+        let start = self.active_tab_idx.saturating_sub(PRELOAD_BEHIND_TABS);
+        let end = (self.active_tab_idx + PRELOAD_AHEAD_TABS + 1).min(self.tabs.len());
+        for tab_idx in start..end {
+            let Some(uri) = self.presentation_slide_uri_for_tab(tab_idx) else {
                 continue;
             };
-            if deck.len() == 0 {
-                continue;
-            }
-
             total += 1;
-            let uri = deck.uri(deck.current.min(deck.len() - 1));
             if self.slide_textures.contains_key(&uri) {
                 loaded += 1;
             }
@@ -501,7 +509,11 @@ impl ViewerState {
     }
 
     pub(crate) fn preload_presentation_slides(&mut self, ctx: &egui::Context) {
-        const NEW_PRELOADS_PER_FRAME: usize = 16;
+        const PRELOAD_BEHIND_TABS: usize = 4;
+        const PRELOAD_AHEAD_TABS: usize = 18;
+        const RETAIN_BEHIND_TABS: usize = 8;
+        const RETAIN_AHEAD_TABS: usize = 26;
+        const NEW_PRELOADS_PER_FRAME: usize = 2;
 
         let size = ctx.content_rect().size();
         if self
@@ -514,17 +526,24 @@ impl ViewerState {
         self.slide_texture_size = Some(size);
 
         let size = egui::vec2(size.x.max(1.0), size.y.max(1.0));
+        let retain_start = self.active_tab_idx.saturating_sub(RETAIN_BEHIND_TABS);
+        let retain_end = (self.active_tab_idx + RETAIN_AHEAD_TABS + 1).min(self.tabs.len());
+        let retain_uris: std::collections::HashSet<String> = (retain_start..retain_end)
+            .filter_map(|tab_idx| self.presentation_slide_uri_for_tab(tab_idx))
+            .collect();
+        self.slide_textures
+            .retain(|uri, _| retain_uris.contains(uri));
+        self.slide_texture_preloads
+            .retain(|uri| retain_uris.contains(uri));
+
+        let preload_start = self.active_tab_idx.saturating_sub(PRELOAD_BEHIND_TABS);
+        let preload_end = (self.active_tab_idx + PRELOAD_AHEAD_TABS + 1).min(self.tabs.len());
         let mut new_preloads_this_frame = 0;
         let mut pending = false;
-        for tab in &self.tabs {
-            let Some(deck) = tab.slides.as_ref() else {
+        for tab_idx in preload_start..preload_end {
+            let Some(uri) = self.presentation_slide_uri_for_tab(tab_idx) else {
                 continue;
             };
-            if deck.len() == 0 {
-                continue;
-            }
-
-            let uri = deck.uri(deck.current.min(deck.len() - 1));
             if self.slide_textures.contains_key(&uri) {
                 continue;
             }
@@ -1106,15 +1125,17 @@ impl ViewerState {
         ui.painter()
             .rect_filled(avail, 0.0, ui.visuals().panel_fill);
 
-        let (loaded, slide_total) = self.presentation_slide_load_progress();
-        if loaded < slide_total {
+        if !self.slide_textures.contains_key(&uri) {
+            let (loaded, slide_total) = self.presentation_slide_window_progress();
             ui.scope_builder(egui::UiBuilder::new().max_rect(avail), |ui| {
                 ui.centered_and_justified(|ui| {
                     ui.vertical_centered(|ui| {
                         ui.add_space(8.0);
                         ui.heading("Loading slides");
                         ui.add_space(8.0);
-                        ui.label(format!("{loaded}/{slide_total}"));
+                        if slide_total > 0 {
+                            ui.label(format!("{loaded}/{slide_total} nearby slides ready"));
+                        }
                         ui.add_space(8.0);
                         let progress = if slide_total == 0 {
                             0.0
