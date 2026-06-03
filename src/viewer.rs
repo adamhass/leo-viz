@@ -4026,18 +4026,6 @@ impl ViewerState {
         let planet_handle = self
             .planet_image_handles
             .get(&(celestial_body, skin, tex_res));
-        let torus_rotation = {
-            let base = settings.rotation;
-            let roll = settings.camera_roll.to_radians();
-            if roll.abs() < 1e-9 {
-                base
-            } else {
-                let c = roll.cos();
-                let s = roll.sin();
-                let roll_mat = nalgebra::Matrix3::new(c, -s, 0.0, s, c, 0.0, 0.0, 0.0, 1.0);
-                roll_mat * base
-            }
-        };
         let torus_zoom = self.torus_zoom;
         let link_width = settings.link_width;
         let fixed_sizes = settings.fixed_sizes;
@@ -4587,6 +4575,20 @@ impl ViewerState {
 
                 if show_torus {
                     ui.vertical(|ui| {
+                        let torus_rotation = {
+                            let settings = &self.tabs[tab_idx].settings;
+                            let base = settings.rotation;
+                            let roll = settings.camera_roll.to_radians();
+                            if roll.abs() < 1e-9 {
+                                base
+                            } else {
+                                let c = roll.cos();
+                                let s = roll.sin();
+                                let roll_mat =
+                                    nalgebra::Matrix3::new(c, -s, 0.0, s, c, 0.0, 0.0, 0.0, 1.0);
+                                roll_mat * base
+                            }
+                        };
                         let planet = &mut self.tabs[tab_idx].planets[planet_idx];
                         let rad_grid: Option<&crate::igrf::IgrfRadGrid> = None;
                         let (trot, tzoom) = draw_torus(
@@ -4620,6 +4622,7 @@ impl ViewerState {
                             fixed_sizes,
                             &body_y_rotation,
                             rad_grid,
+                            trackpad_rotate,
                         );
                         let roll = self.tabs[tab_idx].settings.camera_roll.to_radians();
                         if roll.abs() < 1e-9 {

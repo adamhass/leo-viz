@@ -6166,6 +6166,7 @@ pub fn draw_torus(
     fixed_sizes: bool,
     body_rotation: &Matrix3<f64>,
     igrf_rad_cache: Option<&crate::igrf::IgrfRadGrid>,
+    trackpad_rotate: bool,
 ) -> (Matrix3<f64>, f64) {
     let (major_radius, minor_radius) =
         if let Some((constellation, _, _, _, _, _)) = constellations.first() {
@@ -6548,14 +6549,37 @@ pub fn draw_torus(
     }
 
     if response.response.hovered() {
-        let scroll = ui.input(|i| i.smooth_scroll_delta.y);
-        if scroll != 0.0 {
-            let factor = 1.0 + scroll as f64 * 0.001;
-            zoom = (zoom * factor).clamp(0.01, 20000.0);
-        }
+        let scroll_delta = ui.input(|i| i.smooth_scroll_delta);
         let zd = ui.input(|i| i.zoom_delta());
+        let rot_delta = ui.input(|i| i.rotation_delta()) as f64;
+        if rot_delta.abs() > 0.001 {
+            let cr = rot_delta.cos();
+            let sr = rot_delta.sin();
+            user_rotation = Matrix3::new(cr, sr, 0.0, -sr, cr, 0.0, 0.0, 0.0, 1.0) * user_rotation;
+        }
         if (zd - 1.0).abs() > 0.001 {
             zoom = (zoom * zd as f64).clamp(0.01, 20000.0);
+        } else if trackpad_rotate {
+            let sx = scroll_delta.x as f64;
+            let sy = scroll_delta.y as f64;
+            if sx.abs() > 0.1 || sy.abs() > 0.1 {
+                let sensitivity = 0.002 / (1.0 + zoom.ln().max(0.0));
+                let pitch = -sy * sensitivity;
+                let yaw = sx * sensitivity;
+                let cp = pitch.cos();
+                let sp = pitch.sin();
+                let cy = (-yaw).cos();
+                let s_y = (-yaw).sin();
+                let rx = Matrix3::new(1.0, 0.0, 0.0, 0.0, cp, sp, 0.0, -sp, cp);
+                let ry = Matrix3::new(cy, 0.0, -s_y, 0.0, 1.0, 0.0, s_y, 0.0, cy);
+                user_rotation = rx * ry * user_rotation;
+            }
+        } else {
+            let scroll = scroll_delta.y;
+            if scroll != 0.0 {
+                let factor = 1.0 + scroll as f64 * 0.001;
+                zoom = (zoom * factor).clamp(0.01, 20000.0);
+            }
         }
     }
 
