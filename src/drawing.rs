@@ -6541,6 +6541,118 @@ pub fn draw_torus(
         ui.visuals_mut().widgets.noninteractive.bg_stroke = old_plot_bg_stroke;
     }
 
+    if let Some(hover_pos) = response.response.hover_pos() {
+        let plot_pos = response.transform.value_from_position(hover_pos);
+        let hover_threshold = margin * 0.04;
+        let mut closest: Option<(f64, f64, f64, egui::Color32, String)> = None;
+
+        for (constellation, positions, color_offset, _tle_kind, _orig_idx, cons_label) in
+            constellations.iter()
+        {
+            let sats_per_plane = constellation.total_sats / constellation.num_planes;
+            let orbit_radius = constellation.planet_radius + constellation.altitude_km;
+            let period = 2.0 * PI * (orbit_radius.powi(3) / constellation.planet_mu).sqrt();
+            let mean_motion = 2.0 * PI / period;
+            let ecc = constellation.eccentricity;
+            let omega = constellation.arg_periapsis_deg.to_radians();
+            let raan_step = constellation.raan_step();
+            let raan_offset = constellation.raan_offset_deg.to_radians();
+            let phase_step = constellation.phasing * 2.0 * PI / constellation.total_sats as f64;
+
+            for sat in positions {
+                let theta = raan_offset + raan_step * sat.plane as f64;
+                let sat_spacing = 2.0 * PI * sat.sat_index as f64 / sats_per_plane as f64;
+                let phi = sat_spacing + mean_motion * time + phase_step * sat.plane as f64;
+                let r_orbit = if ecc > 0.001 {
+                    minor_radius * (1.0 - ecc * ecc) / (1.0 + ecc * phi.cos())
+                } else {
+                    minor_radius
+                };
+                let angle = phi + omega;
+                let r = major_radius + r_orbit * angle.cos();
+                let y = r_orbit * angle.sin();
+                let x = r * theta.cos();
+                let z = r * theta.sin();
+                let (tx, ty, _tz) = rotate_point_matrix(x, y, z, &display_rotation);
+                let dx = tx - plot_pos.x;
+                let dy = ty - plot_pos.y;
+                let dist_sq = dx * dx + dy * dy;
+                if dist_sq >= hover_threshold * hover_threshold
+                    || closest
+                        .as_ref()
+                        .is_some_and(|(d, _, _, _, _)| dist_sq >= *d)
+                {
+                    continue;
+                }
+
+                let color = if show_asc_desc_colors {
+                    if sat.ascending {
+                        color_ascending
+                    } else {
+                        color_descending
+                    }
+                } else {
+                    plane_color(if single_color {
+                        *color_offset
+                    } else {
+                        sat.plane + color_offset
+                    })
+                };
+                let id = sat
+                    .name
+                    .clone()
+                    .unwrap_or_else(|| format!("{} P{}:S{}", cons_label, sat.plane, sat.sat_index));
+                let sat_r = (sat.x * sat.x + sat.y * sat.y + sat.z * sat.z).sqrt();
+                let alt_km = sat_r - constellation.planet_radius;
+                let vel_km_s = (constellation.planet_mu / sat_r).sqrt();
+                let inv_body = body_rotation.transpose();
+                let body_pos = inv_body * Vector3::new(sat.x, sat.y, sat.z);
+                let ground_lat = (body_pos.y / sat_r).asin().to_degrees();
+                let ground_lon = (-body_pos.z).atan2(body_pos.x).to_degrees();
+                let tip = if let (Some(inc), Some(mm)) =
+                    (sat.tle_inclination_deg, sat.tle_mean_motion)
+                {
+                    let period_min = 1440.0 / mm;
+                    format!(
+                        "{}  {:.1}° {:.1}°\n{:.0} km  {:.2} km/s\nInc {:.1}°  {:.2} rev/day\nPeriod {:.1} min",
+                        id, ground_lat, ground_lon, alt_km, vel_km_s, inc, mm, period_min,
+                    )
+                } else {
+                    format!(
+                        "{}  {:.1}° {:.1}°\n{:.0} km  {:.2} km/s",
+                        id, ground_lat, ground_lon, alt_km, vel_km_s,
+                    )
+                };
+                closest = Some((dist_sq, tx, ty, color, tip));
+            }
+        }
+
+        if let Some((_dist_sq, tx, ty, color, tip)) = closest {
+            let screen_pt = response
+                .transform
+                .position_from_point(&egui_plot::PlotPoint::new(tx, ty));
+            ui.painter().circle_stroke(
+                screen_pt,
+                scaled_sat_radius * 2.0,
+                egui::Stroke::new(2.0, color),
+            );
+            let font = egui::FontId::proportional(12.0);
+            let galley = ui.painter().layout_no_wrap(tip, font, egui::Color32::WHITE);
+            let tip_pos = screen_pt
+                - egui::Vec2::new(
+                    galley.size().x * 0.5,
+                    galley.size().y + scaled_sat_radius * 2.0 + 8.0,
+                );
+            let rect = egui::Rect::from_min_size(tip_pos, galley.size()).expand(4.0);
+            ui.painter().rect_filled(
+                rect,
+                3.0,
+                egui::Color32::from_rgba_unmultiplied(0, 0, 0, 200),
+            );
+            ui.painter().galley(tip_pos, galley, egui::Color32::WHITE);
+        }
+    }
+
     if response.response.dragged() && !response.response.drag_started() {
         let drag = response.response.drag_delta();
         let sens = 0.01 / zoom.max(1.0);
