@@ -753,7 +753,10 @@ impl eframe::App for App {
 
         let v = &mut self.viewer;
 
-        ctx.set_visuals(if v.dark_mode {
+        let effective_dark_mode = v
+            .presentation_uses_dark_mode_for_tab(v.active_tab_idx)
+            .unwrap_or(v.dark_mode);
+        ctx.set_visuals(if effective_dark_mode {
             let mut vis = egui::Visuals::dark();
             let black = egui::Color32::BLACK;
             vis.window_fill = black;

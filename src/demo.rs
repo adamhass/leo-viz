@@ -1435,6 +1435,7 @@ impl App {
         ctx: &eframe::egui::Context,
     ) {
         self.viewer.texture_resolution = TextureResolution::R4096;
+        self.viewer.dark_mode = false;
         self.viewer.planet_image_handles.clear();
         self.setup_tabs(|v| presentation.build(v));
         let presentation_bodies: Vec<_> = self

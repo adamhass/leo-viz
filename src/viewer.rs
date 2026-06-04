@@ -480,6 +480,20 @@ impl TabViewer for ViewerState {
 }
 
 impl ViewerState {
+    pub(crate) fn presentation_slide_number_for_tab(&self, tab_idx: usize) -> Option<usize> {
+        let tab = self.tabs.get(tab_idx)?;
+        if let Some(slide_number) = tab.presentation_slide_number {
+            return Some(slide_number);
+        }
+        let deck = tab.slides.as_ref()?;
+        Some(deck.range.start + deck.current + 1)
+    }
+
+    pub(crate) fn presentation_uses_dark_mode_for_tab(&self, tab_idx: usize) -> Option<bool> {
+        let slide_number = self.presentation_slide_number_for_tab(tab_idx)?;
+        Some(slide_number >= 73)
+    }
+
     fn presentation_slide_uri_for_tab(&self, tab_idx: usize) -> Option<String> {
         let deck = self.tabs.get(tab_idx)?.slides.as_ref()?;
         if deck.len() == 0 {
