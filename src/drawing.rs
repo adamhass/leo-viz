@@ -783,6 +783,181 @@ pub fn draw_routing_path(
     }
 }
 
+fn draw_flow_segment(
+    plot_ui: &mut egui_plot::PlotUi,
+    start: [f64; 2],
+    end: [f64; 2],
+    color: egui::Color32,
+    width: f32,
+    t0: f64,
+    t1: f64,
+) {
+    let dx = end[0] - start[0];
+    let dy = end[1] - start[1];
+    let len = (dx * dx + dy * dy).sqrt();
+    if len <= 1e-9 {
+        return;
+    }
+    let t0 = t0.clamp(0.0, 1.0);
+    let t1 = t1.clamp(0.0, 1.0);
+    if t1 <= t0 {
+        return;
+    }
+    let p0 = [start[0] + dx * t0, start[1] + dy * t0];
+    let p1 = [start[0] + dx * t1, start[1] + dy * t1];
+    plot_ui.line(
+        Line::new("", PlotPoints::new(vec![p0, p1]))
+            .color(color)
+            .width(width),
+    );
+}
+
+fn flow_color_for_link(color: egui::Color32, alpha: u8) -> egui::Color32 {
+    let brighten = |v: u8| -> u8 { (v as f32 * 0.45 + 255.0 * 0.55).round() as u8 };
+    egui::Color32::from_rgba_unmultiplied(
+        brighten(color.r()),
+        brighten(color.g()),
+        brighten(color.b()),
+        alpha,
+    )
+}
+
+fn draw_flow_interval(
+    plot_ui: &mut egui_plot::PlotUi,
+    segments: &[([f64; 2], [f64; 2], f64)],
+    start_dist: f64,
+    end_dist: f64,
+    color: egui::Color32,
+    width: f32,
+) {
+    if end_dist <= start_dist {
+        return;
+    }
+    let mut consumed = 0.0;
+    for (a, b, len) in segments {
+        let seg_start = consumed;
+        let seg_end = consumed + *len;
+        let overlap_start = start_dist.max(seg_start);
+        let overlap_end = end_dist.min(seg_end);
+        if overlap_end > overlap_start {
+            let local_t0 = (overlap_start - seg_start) / *len;
+            let local_t1 = (overlap_end - seg_start) / *len;
+            draw_flow_segment(plot_ui, *a, *b, color, width, local_t0, local_t1);
+        }
+        consumed = seg_end;
+    }
+}
+
+fn draw_flow_packet(
+    plot_ui: &mut egui_plot::PlotUi,
+    segments: &[([f64; 2], [f64; 2], f64)],
+    total_len: f64,
+    tail_dist: f64,
+    head_dist: f64,
+    color: egui::Color32,
+    width: f32,
+) {
+    let tail_dist = tail_dist.max(0.0);
+    let head_dist = head_dist.min(total_len);
+    if head_dist <= tail_dist {
+        return;
+    }
+
+    let gradient_steps = 8;
+    for step in 0..gradient_steps {
+        let t0 = step as f64 / gradient_steps as f64;
+        let t1 = (step + 1) as f64 / gradient_steps as f64;
+        let start = tail_dist + (head_dist - tail_dist) * t0;
+        let end = tail_dist + (head_dist - tail_dist) * t1;
+        let alpha_t = (step + 1) as f32 / gradient_steps as f32;
+        let alpha = (45.0 + 210.0 * alpha_t.powf(1.7))
+            .round()
+            .clamp(45.0, 255.0) as u8;
+        draw_flow_interval(
+            plot_ui,
+            segments,
+            start,
+            end,
+            flow_color_for_link(color, alpha),
+            width,
+        );
+    }
+}
+
+fn draw_spacecomp_flow_path(
+    plot_ui: &mut egui_plot::PlotUi,
+    path: &[(usize, usize)],
+    positions: &[SatelliteState],
+    rotation: &Matrix3<f64>,
+    color: egui::Color32,
+    width: f32,
+    hide_behind_earth: bool,
+    earth_r_sq: f64,
+    time: f64,
+    stage_offset: f64,
+) {
+    if path.len() < 2 {
+        return;
+    }
+
+    let mut segments: Vec<([f64; 2], [f64; 2], f64)> = Vec::new();
+    let mut total_len = 0.0;
+
+    for w in path.windows(2) {
+        let pos1 = positions
+            .iter()
+            .find(|s| s.plane == w[0].0 && s.sat_index == w[0].1);
+        let pos2 = positions
+            .iter()
+            .find(|s| s.plane == w[1].0 && s.sat_index == w[1].1);
+        let (Some(p1), Some(p2)) = (pos1, pos2) else {
+            continue;
+        };
+        let (rx1, ry1, rz1) = rotate_point_matrix(p1.x, p1.y, p1.z, rotation);
+        let (rx2, ry2, rz2) = rotate_point_matrix(p2.x, p2.y, p2.z, rotation);
+        let visible1 = rz1 >= 0.0 || (rx1 * rx1 + ry1 * ry1) >= earth_r_sq;
+        let visible2 = rz2 >= 0.0 || (rx2 * rx2 + ry2 * ry2) >= earth_r_sq;
+        let segment = if hide_behind_earth {
+            clip_link_at_earth(rx1, ry1, rz1, visible1, rx2, ry2, rz2, visible2, earth_r_sq)
+        } else {
+            Some(([rx1, ry1], [rx2, ry2]))
+        };
+        let Some((a, b)) = segment else {
+            continue;
+        };
+        let dx = b[0] - a[0];
+        let dy = b[1] - a[1];
+        let len = (dx * dx + dy * dy).sqrt();
+        if len <= 1e-9 {
+            continue;
+        }
+        total_len += len;
+        segments.push((a, b, len));
+    }
+
+    if total_len <= 1e-9 {
+        return;
+    }
+
+    let packet_len = 180.0;
+    let packet_spacing = 360.0;
+    let speed = 480.0;
+    let first_head = (time * speed + stage_offset * packet_spacing).rem_euclid(packet_spacing);
+    let mut head = first_head;
+    while head - packet_len <= total_len {
+        draw_flow_packet(
+            plot_ui,
+            &segments,
+            total_len,
+            head - packet_len,
+            head,
+            color,
+            width,
+        );
+        head += packet_spacing;
+    }
+}
+
 fn path_distance_label(
     path: &[(usize, usize)],
     positions: &[SatelliteState],
@@ -3487,7 +3662,7 @@ pub fn draw_3d_view(
                                         .unwrap_or(0)
                                 };
 
-                                let mut all_paths: Vec<(Vec<(usize, usize)>, egui::Color32)> =
+                                let mut all_paths: Vec<(Vec<(usize, usize)>, egui::Color32, f64)> =
                                     Vec::new();
 
                                 for &(ci, mi) in &job.assignments {
@@ -3511,7 +3686,7 @@ pub fn draw_3d_view(
                                             is_star,
                                         )
                                     };
-                                    all_paths.push((path, color_collector));
+                                    all_paths.push((path, color_collector, 0.00));
                                 }
 
                                 let mut drawn_mappers = std::collections::HashSet::new();
@@ -3537,7 +3712,7 @@ pub fn draw_3d_view(
                                                 is_star,
                                             )
                                         };
-                                        all_paths.push((path, color_mapper));
+                                        all_paths.push((path, color_mapper, 0.33));
                                     }
                                 }
 
@@ -3562,7 +3737,7 @@ pub fn draw_3d_view(
                                             is_star,
                                         )
                                     };
-                                    all_paths.push((path, color_reducer));
+                                    all_paths.push((path, color_reducer, 0.66));
                                 }
 
                                 type Edge = ((usize, usize), (usize, usize));
@@ -3575,7 +3750,7 @@ pub fn draw_3d_view(
                                 };
                                 let mut edge_count: std::collections::HashMap<Edge, usize> =
                                     std::collections::HashMap::new();
-                                for (path, _) in &all_paths {
+                                for (path, _, _) in &all_paths {
                                     for w in path.windows(2) {
                                         let e = norm_edge(w[0], w[1]);
                                         *edge_count.entry(e).or_insert(0) += 1;
@@ -3586,7 +3761,7 @@ pub fn draw_3d_view(
 
                                 let mut edge_perp: std::collections::HashMap<Edge, (f64, f64)> =
                                     std::collections::HashMap::new();
-                                for (path, _) in &all_paths {
+                                for (path, _, _) in &all_paths {
                                     for w in path.windows(2) {
                                         let e = norm_edge(w[0], w[1]);
                                         if edge_perp.contains_key(&e) {
@@ -3623,7 +3798,7 @@ pub fn draw_3d_view(
                                     }
                                 }
 
-                                for (path, color) in &all_paths {
+                                for (path, color, _) in &all_paths {
                                     for w in path.windows(2) {
                                         let e = norm_edge(w[0], w[1]);
                                         let total = edge_count[&e];
@@ -3705,8 +3880,27 @@ pub fn draw_3d_view(
                                     }
                                 }
 
+                                if aoi.show_spacecomp_flow {
+                                    plot_ui.ctx().request_repaint();
+                                    let flow_time = plot_ui.ctx().input(|i| i.time);
+                                    for (path, color, stage_offset) in &all_paths {
+                                        draw_spacecomp_flow_path(
+                                            plot_ui,
+                                            path,
+                                            positions,
+                                            &satellite_rotation,
+                                            *color,
+                                            routing_width * 1.65,
+                                            hide_behind_earth,
+                                            earth_r_sq,
+                                            flow_time,
+                                            *stage_offset,
+                                        );
+                                    }
+                                }
+
                                 if show_path_distance {
-                                    for (path, _) in &all_paths {
+                                    for (path, _, _) in &all_paths {
                                         if let Some(label) = path_distance_label(
                                             path,
                                             positions,

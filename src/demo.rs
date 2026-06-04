@@ -1251,6 +1251,7 @@ fn spacecomp_demo_tab(name: String, title: String, time: f64) -> TabConfig {
         job_mode: AoiJobMode::SpaceComp,
         job_n: 3,
         reducer_placement: crate::config::SpaceCompReducerPlacement::NearMappers,
+        show_spacecomp_flow: false,
         selected: false,
     });
     tab.planets.push(planet);

@@ -285,6 +285,7 @@ pub struct AreaOfInterest {
     pub job_mode: AoiJobMode,
     pub job_n: usize,
     pub reducer_placement: SpaceCompReducerPlacement,
+    pub show_spacecomp_flow: bool,
     pub selected: bool,
 }
 

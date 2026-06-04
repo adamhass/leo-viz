@@ -910,6 +910,7 @@ impl ViewerState {
                             job_n: 3,
                             reducer_placement:
                                 crate::config::SpaceCompReducerPlacement::NearMappers,
+                            show_spacecomp_flow: false,
                             selected: false,
                         });
                     }
@@ -1048,8 +1049,14 @@ impl ViewerState {
                                             });
                                         if aoi.job_mode == crate::config::AoiJobMode::SpaceComp {
                                             ui.label("n");
-                                            ui.add(egui::DragValue::new(&mut aoi.job_n).range(1..=50).speed(0.2));
-                                            egui::ComboBox::from_id_salt("edit_aoi_reducer_placement")
+                                            ui.add(
+                                                egui::DragValue::new(&mut aoi.job_n)
+                                                    .range(1..=50)
+                                                    .speed(0.2),
+                                            );
+                                            egui::ComboBox::from_id_salt(
+                                                "edit_aoi_reducer_placement",
+                                            )
                                                 .selected_text(aoi.reducer_placement.label())
                                                 .show_ui(ui, |ui| {
                                                     ui.selectable_value(
@@ -1063,6 +1070,10 @@ impl ViewerState {
                                                         "Near GS",
                                                     );
                                                 });
+                                            ui.checkbox(
+                                                &mut aoi.show_spacecomp_flow,
+                                                "Show data flow",
+                                            );
                                         }
                                     });
                                     ui.separator();
@@ -1566,6 +1577,9 @@ impl ViewerState {
                                                 aoi_changed = true;
                                             }
                                         });
+                                    if ui.checkbox(&mut aoi.show_spacecomp_flow, "Flow").changed() {
+                                        aoi_changed = true;
+                                    }
                                 }
                             });
                         }
@@ -1593,6 +1607,7 @@ impl ViewerState {
                                 job_mode: crate::config::AoiJobMode::Route,
                                 job_n: 3,
                                 reducer_placement: crate::config::SpaceCompReducerPlacement::NearMappers,
+                                show_spacecomp_flow: false,
                                 selected: false,
                             });
                             aoi_changed = true;
