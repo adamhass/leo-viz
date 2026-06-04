@@ -1213,7 +1213,7 @@ fn spacecomp_demo_tab(name: String, title: String, time: f64) -> TabConfig {
             Roles are reassigned every cycle as the constellation rotates; the satellites themselves don't know in advance which job they'll play.
         "}.to_string();
     tab.settings.time = time;
-    tab.settings.speed = 10.0;
+    tab.settings.speed = 5.0;
     tab.settings.earth_fixed_camera = true;
     tab.settings.rotation =
         crate::math::lat_lon_to_matrix(8.5_f64.to_radians(), 15.0_f64.to_radians());
