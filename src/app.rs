@@ -496,6 +496,7 @@ impl App {
                 slide_textures: HashMap::new(),
                 slide_texture_preloads: std::collections::HashSet::new(),
                 slide_preload_started: false,
+                full_presentation_preload: false,
                 slide_texture_size: None,
                 ss_last_render_instant: None,
                 planet_sizes_t: 0.0,
@@ -2967,7 +2968,25 @@ impl eframe::App for App {
                             let enter = ui.input(|i| i.key_pressed(egui::Key::Enter));
                             let escape = ui.input(|i| i.key_pressed(egui::Key::Escape));
                             if enter {
-                                if let Ok(n) = self.viewer.command_buffer.trim().parse::<f64>() {
+                                let command = self.viewer.command_buffer.trim();
+                                if command.eq_ignore_ascii_case("load") {
+                                    self.viewer.full_presentation_preload = true;
+                                    self.viewer.slide_preload_started = true;
+                                    let presentation_bodies: Vec<_> = self
+                                        .viewer
+                                        .tabs
+                                        .iter()
+                                        .flat_map(|tab| {
+                                            tab.planets
+                                                .iter()
+                                                .map(|planet| (planet.celestial_body, planet.skin))
+                                        })
+                                        .collect();
+                                    for (body, skin) in presentation_bodies {
+                                        self.viewer.load_texture_for_body(body, skin, ctx);
+                                    }
+                                    ctx.request_repaint();
+                                } else if let Ok(n) = command.parse::<f64>() {
                                     let idx = self.viewer.active_tab_idx;
                                     if let Some(tab) = self.viewer.tabs.get_mut(idx) {
                                         tab.settings.speed = n;

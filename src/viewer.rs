@@ -345,6 +345,7 @@ pub(crate) struct ViewerState {
     pub(crate) slide_textures: HashMap<String, egui::load::SizedTexture>,
     pub(crate) slide_texture_preloads: std::collections::HashSet<String>,
     pub(crate) slide_preload_started: bool,
+    pub(crate) full_presentation_preload: bool,
     pub(crate) slide_texture_size: Option<egui::Vec2>,
     pub(crate) ss_last_render_instant: Option<web_time::Instant>,
     pub(crate) planet_sizes_t: f64,
@@ -493,6 +494,7 @@ impl ViewerState {
         const RETAIN_BEHIND_TABS: usize = 8;
         const RETAIN_AHEAD_TABS: usize = 26;
         const NEW_PRELOADS_PER_FRAME: usize = 2;
+        const NEW_FULL_PRELOADS_PER_FRAME: usize = 3;
 
         let size = ctx.content_rect().size();
         if self
@@ -505,26 +507,36 @@ impl ViewerState {
         self.slide_texture_size = Some(size);
 
         let size = egui::vec2(size.x.max(1.0), size.y.max(1.0));
-        let retain_start = self.active_tab_idx.saturating_sub(RETAIN_BEHIND_TABS);
-        let retain_end = (self.active_tab_idx + RETAIN_AHEAD_TABS + 1).min(self.tabs.len());
-        let retain_uris: std::collections::HashSet<String> = (retain_start..retain_end)
-            .filter_map(|tab_idx| self.presentation_slide_uri_for_tab(tab_idx))
-            .collect();
-        self.slide_textures
-            .retain(|uri, _| retain_uris.contains(uri));
-        self.slide_texture_preloads
-            .retain(|uri| retain_uris.contains(uri));
+        if !self.full_presentation_preload {
+            let retain_start = self.active_tab_idx.saturating_sub(RETAIN_BEHIND_TABS);
+            let retain_end = (self.active_tab_idx + RETAIN_AHEAD_TABS + 1).min(self.tabs.len());
+            let retain_uris: std::collections::HashSet<String> = (retain_start..retain_end)
+                .filter_map(|tab_idx| self.presentation_slide_uri_for_tab(tab_idx))
+                .collect();
+            self.slide_textures
+                .retain(|uri, _| retain_uris.contains(uri));
+            self.slide_texture_preloads
+                .retain(|uri| retain_uris.contains(uri));
+        }
 
-        if self
-            .tabs
-            .get(self.active_tab_idx)
-            .is_some_and(|tab| !tab.planets.is_empty())
+        if !self.full_presentation_preload
+            && self
+                .tabs
+                .get(self.active_tab_idx)
+                .is_some_and(|tab| !tab.planets.is_empty())
         {
             return;
         }
 
-        let preload_start = self.active_tab_idx.saturating_sub(PRELOAD_BEHIND_TABS);
-        let preload_end = (self.active_tab_idx + PRELOAD_AHEAD_TABS + 1).min(self.tabs.len());
+        let (preload_start, preload_end, max_new_preloads) = if self.full_presentation_preload {
+            (0, self.tabs.len(), NEW_FULL_PRELOADS_PER_FRAME)
+        } else {
+            (
+                self.active_tab_idx.saturating_sub(PRELOAD_BEHIND_TABS),
+                (self.active_tab_idx + PRELOAD_AHEAD_TABS + 1).min(self.tabs.len()),
+                NEW_PRELOADS_PER_FRAME,
+            )
+        };
         let mut new_preloads_this_frame = 0;
         let mut pending = false;
         for tab_idx in preload_start..preload_end {
@@ -536,7 +548,7 @@ impl ViewerState {
             }
 
             let already_requested = self.slide_texture_preloads.contains(&uri);
-            if !already_requested && new_preloads_this_frame >= NEW_PRELOADS_PER_FRAME {
+            if !already_requested && new_preloads_this_frame >= max_new_preloads {
                 pending = true;
                 continue;
             }
