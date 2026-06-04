@@ -2885,34 +2885,43 @@ impl eframe::App for App {
         #[allow(deprecated)]
         let editing_text = ctx.wants_keyboard_input();
         if !self.viewer.command_mode && !editing_text {
-            let (colon, j_key, k_key, space_key, s_key) = ctx.input(|i| {
-                let mut c = false;
-                let mut j = false;
-                let mut k = false;
-                let mut s = false;
-                for e in &i.events {
-                    if let egui::Event::Text(t) = e {
-                        match t.as_str() {
-                            ":" => c = true,
-                            "j" => j = true,
-                            "k" => k = true,
-                            "s" | "S" => s = true,
-                            _ => {}
+            let (colon, j_key, k_key, space_key, s_key, zoom_in_key, zoom_out_key) =
+                ctx.input(|i| {
+                    let mut c = false;
+                    let mut j = false;
+                    let mut k = false;
+                    let mut s = false;
+                    let mut zoom_in = false;
+                    let mut zoom_out = false;
+                    for e in &i.events {
+                        if let egui::Event::Text(t) = e {
+                            match t.as_str() {
+                                ":" => c = true,
+                                "j" => j = true,
+                                "k" => k = true,
+                                "s" | "S" => s = true,
+                                "+" | "=" => zoom_in = true,
+                                "-" | "_" => zoom_out = true,
+                                _ => {}
+                            }
                         }
                     }
-                }
-                (
-                    c,
-                    j || i.key_pressed(egui::Key::ArrowRight)
-                        || i.key_pressed(egui::Key::ArrowDown)
-                        || i.key_pressed(egui::Key::PageDown),
-                    k || i.key_pressed(egui::Key::ArrowLeft)
-                        || i.key_pressed(egui::Key::ArrowUp)
-                        || i.key_pressed(egui::Key::PageUp),
-                    i.key_pressed(egui::Key::Space),
-                    s || i.key_pressed(egui::Key::S),
-                )
-            });
+                    (
+                        c,
+                        j || i.key_pressed(egui::Key::ArrowRight)
+                            || i.key_pressed(egui::Key::ArrowDown)
+                            || i.key_pressed(egui::Key::PageDown),
+                        k || i.key_pressed(egui::Key::ArrowLeft)
+                            || i.key_pressed(egui::Key::ArrowUp)
+                            || i.key_pressed(egui::Key::PageUp),
+                        i.key_pressed(egui::Key::Space),
+                        s || i.key_pressed(egui::Key::S),
+                        zoom_in
+                            || i.key_pressed(egui::Key::Plus)
+                            || i.key_pressed(egui::Key::Equals),
+                        zoom_out || i.key_pressed(egui::Key::Minus),
+                    )
+                });
             if colon {
                 self.viewer.command_mode = true;
                 self.viewer.command_buffer.clear();
@@ -2925,6 +2934,12 @@ impl eframe::App for App {
                 let idx = self.viewer.active_tab_idx;
                 if let Some(tab) = self.viewer.tabs.get_mut(idx) {
                     tab.settings.auto_rotate = !tab.settings.auto_rotate;
+                }
+            } else if zoom_in_key || zoom_out_key {
+                let idx = self.viewer.active_tab_idx;
+                if let Some(tab) = self.viewer.tabs.get_mut(idx) {
+                    let factor = if zoom_in_key { 1.2 } else { 1.0 / 1.2 };
+                    tab.settings.zoom = (tab.settings.zoom * factor).clamp(0.01, 20000.0);
                 }
             } else if j_key || k_key {
                 let tab_data: Vec<(egui_dock::SurfaceIndex, egui_dock::NodeIndex, usize)> = self
