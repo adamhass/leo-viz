@@ -2903,8 +2903,12 @@ impl eframe::App for App {
                 }
                 (
                     c,
-                    j || i.key_pressed(egui::Key::ArrowRight),
-                    k || i.key_pressed(egui::Key::ArrowLeft),
+                    j || i.key_pressed(egui::Key::ArrowRight)
+                        || i.key_pressed(egui::Key::ArrowDown)
+                        || i.key_pressed(egui::Key::PageDown),
+                    k || i.key_pressed(egui::Key::ArrowLeft)
+                        || i.key_pressed(egui::Key::ArrowUp)
+                        || i.key_pressed(egui::Key::PageUp),
                     i.key_pressed(egui::Key::Space),
                     s || i.key_pressed(egui::Key::S),
                 )
