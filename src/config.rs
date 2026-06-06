@@ -12,6 +12,15 @@ use eframe::egui;
 use nalgebra::Matrix3;
 use std::collections::{HashMap, HashSet};
 
+pub type SatelliteKey = (usize, usize);
+pub type GroundTrackKey = (usize, usize, usize);
+pub type GroundTrackSample = (f64, f64, f64);
+pub type IgrfRadiationJob = (
+    f64,
+    f64,
+    std::sync::Arc<std::sync::Mutex<Option<crate::igrf::IgrfRadGrid>>>,
+);
+
 #[derive(Clone, Copy, PartialEq)]
 pub enum Propagator {
     Keplerian,
@@ -355,7 +364,7 @@ pub struct PlanetConfig {
     pub device_layers: Vec<DeviceLayer>,
     pub pass_cache: PassPredictionCache,
     pub conjunction_cache: ConjunctionCache,
-    pub conjunction_prev_positions: HashMap<(usize, usize), [f64; 3]>,
+    pub conjunction_prev_positions: HashMap<SatelliteKey, [f64; 3]>,
     pub show_conjunction_window: bool,
     pub show_conjunction_lines: bool,
     pub kessler: KesslerSimulation,
@@ -371,7 +380,7 @@ pub struct PlanetConfig {
     pub tle_isl_max_lat_deg: f64,
     /// Accumulated sub-satellite points per tracked satellite, keyed by
     /// (constellation_idx, plane, sat_index). Stored as (lat_deg, lon_deg, sim_time_s).
-    pub ground_track_history: HashMap<(usize, usize, usize), Vec<(f64, f64, f64)>>,
+    pub ground_track_history: HashMap<GroundTrackKey, Vec<GroundTrackSample>>,
     /// Optional per-planet projection override. When `None`, the tab's
     /// `TabSettings.planet_projection` is used.
     pub projection_override: Option<crate::projection::ProjectionKind>,
@@ -1023,11 +1032,7 @@ pub struct RadiationConfig {
     pub igrf_rad_cache: Option<(f64, f64, crate::igrf::IgrfRadGrid)>,
     #[cfg(not(target_arch = "wasm32"))]
     #[allow(dead_code)]
-    pub igrf_rad_pending: Option<(
-        f64,
-        f64,
-        std::sync::Arc<std::sync::Mutex<Option<crate::igrf::IgrfRadGrid>>>,
-    )>,
+    pub igrf_rad_pending: Option<IgrfRadiationJob>,
 }
 
 impl Default for RadiationConfig {

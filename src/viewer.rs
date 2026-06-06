@@ -9,7 +9,7 @@ use crate::config::{
     AreaOfInterest, ConstellationConfig, DeviceLayer, GroundStation, NumericalState, Preset,
     Propagator, TabConfig, View3DFlags,
 };
-use crate::drawing::{draw_3d_view, draw_map_view, draw_torus, plane_color};
+use crate::drawing::{draw_3d_view, draw_map_view, draw_torus, plane_color, DrawConstellationData};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::geo::{GeoLoadState, GeoOverlayData};
 use crate::texture::asset_path;
@@ -2819,7 +2819,7 @@ impl ViewerState {
         let hide_sats = false;
         #[cfg(target_arch = "wasm32")]
         let hide_sats = false;
-        let mut constellations_data: Vec<_> = if hide_sats {
+        let mut constellations_data: Vec<DrawConstellationData> = if hide_sats {
             Vec::new()
         } else {
             planet

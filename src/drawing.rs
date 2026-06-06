@@ -27,6 +27,15 @@ use std::sync::Arc;
 
 use crate::EARTH_VISUAL_SCALE;
 
+pub(crate) type DrawConstellationData = (
+    WalkerConstellation,
+    Vec<SatelliteState>,
+    usize,
+    u8,
+    usize,
+    String,
+);
+
 fn normalize_field_nt(f: f64, r_earth_radii: f64) -> f64 {
     let ref_field = 30000.0 / r_earth_radii.powi(3);
     let lo = ref_field * 0.67;
@@ -1013,14 +1022,7 @@ fn path_distance_and_midpoint(
 pub fn draw_3d_view(
     ui: &mut egui::Ui,
     id: &str,
-    constellations: &[(
-        WalkerConstellation,
-        Vec<SatelliteState>,
-        usize,
-        u8,
-        usize,
-        String,
-    )],
+    constellations: &[DrawConstellationData],
     flags: View3DFlags,
     coverage_angle: f64,
     mut rotation: Matrix3<f64>,
@@ -3436,7 +3438,7 @@ pub fn draw_3d_view(
                              -> Option<(
                                 usize,
                                 &WalkerConstellation,
-                                &Vec<SatelliteState>,
+                                &[SatelliteState],
                                 &SatelliteState,
                                 u8,
                             )> {
@@ -3459,7 +3461,7 @@ pub fn draw_3d_view(
                                 let mut best: Option<(
                                     usize,
                                     &WalkerConstellation,
-                                    &Vec<SatelliteState>,
+                                    &[SatelliteState],
                                     &SatelliteState,
                                     u8,
                                     f64,
@@ -5888,14 +5890,7 @@ fn project_segments(
 pub fn draw_map_view(
     ui: &mut egui::Ui,
     id: &str,
-    constellations: &[(
-        WalkerConstellation,
-        Vec<SatelliteState>,
-        usize,
-        u8,
-        usize,
-        String,
-    )],
+    constellations: &[DrawConstellationData],
     proj: &dyn crate::projection::Projection,
     width: f32,
     height: f32,
@@ -6325,14 +6320,7 @@ pub fn draw_map_view(
 pub fn draw_torus(
     ui: &mut egui::Ui,
     id: &str,
-    constellations: &[(
-        WalkerConstellation,
-        Vec<SatelliteState>,
-        usize,
-        u8,
-        usize,
-        String,
-    )],
+    constellations: &[DrawConstellationData],
     time: f64,
     rotation: Matrix3<f64>,
     width: f32,
