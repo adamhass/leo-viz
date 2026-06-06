@@ -9,7 +9,10 @@ use crate::config::{
     AreaOfInterest, ConstellationConfig, DeviceLayer, GroundStation, NumericalState, Preset,
     Propagator, TabConfig, View3DFlags,
 };
-use crate::drawing::{draw_3d_view, draw_map_view, draw_torus, plane_color, DrawConstellationData};
+use crate::drawing::{
+    draw_3d_view, draw_map_view, draw_torus, plane_color, Draw3dInput, Draw3dState,
+    DrawConstellationData,
+};
 #[cfg(not(target_arch = "wasm32"))]
 use crate::geo::{GeoLoadState, GeoOverlayData};
 use crate::texture::asset_path;
@@ -4389,84 +4392,96 @@ impl ViewerState {
                         let gs_locked_for_draw = planet.has_running_cfs();
                         let (rot, new_zoom) = draw_3d_view(
                             ui,
-                            &view_name,
-                            &constellations_data,
-                            view_flags,
-                            coverage_angle,
-                            rotation,
-                            satellite_rotation,
-                            view_width,
-                            view_height,
-                            planet_handle,
-                            zoom,
-                            sat_radius,
-                            link_width,
-                            &mut planet.pending_cameras,
-                            &mut self.camera_id_counter,
-                            &mut planet.satellite_cameras,
-                            &mut planet.cameras_to_remove,
-                            &mut planet.pinned_isls,
-                            planet_radius,
-                            flattening,
-                            gpu_available,
-                            (celestial_body, skin, tex_res),
-                            &body_y_rotation,
-                            sun_dir,
-                            time,
-                            &mut planet.ground_stations,
-                            gs_locked_for_draw,
-                            &mut planet.areas_of_interest,
-                            device_layers_ref,
-                            body_rot_angle,
-                            &mut self.dragging_place,
-                            (tab_idx, planet_idx),
-                            detail_bounds,
-                            #[cfg(not(target_arch = "wasm32"))]
-                            {
-                                match &self.geo_data {
-                                    GeoLoadState::Loaded(d) => {
-                                        if show_borders {
-                                            d.borders.as_slice()
-                                        } else {
-                                            &[]
+                            Draw3dInput {
+                                id: &view_name,
+                                constellations: &constellations_data,
+                                flags: view_flags,
+                                coverage_angle,
+                                rotation,
+                                satellite_rotation,
+                                width: view_width,
+                                height: view_height,
+                                earth_texture: planet_handle,
+                                zoom,
+                                sat_radius,
+                                link_width,
+                                planet_radius,
+                                flattening,
+                                gpu_available,
+                                body_key: (celestial_body, skin, tex_res),
+                                body_rotation: &body_y_rotation,
+                                sun_dir,
+                                time,
+                                ground_stations_locked: gs_locked_for_draw,
+                                device_layers: device_layers_ref,
+                                body_rot_angle,
+                                drag_tab_planet: (tab_idx, planet_idx),
+                                detail_bounds,
+                                geo_borders: {
+                                    #[cfg(not(target_arch = "wasm32"))]
+                                    {
+                                        match &self.geo_data {
+                                            GeoLoadState::Loaded(d) => {
+                                                if show_borders {
+                                                    d.borders.as_slice()
+                                                } else {
+                                                    &[]
+                                                }
+                                            }
+                                            _ => &[],
                                         }
                                     }
-                                    _ => &[],
-                                }
-                            },
-                            #[cfg(target_arch = "wasm32")]
-                            &[],
-                            #[cfg(not(target_arch = "wasm32"))]
-                            {
-                                match &self.geo_data {
-                                    GeoLoadState::Loaded(d) => {
-                                        if show_cities {
-                                            d.cities.as_slice()
-                                        } else {
-                                            &[]
+                                    #[cfg(target_arch = "wasm32")]
+                                    {
+                                        &[]
+                                    }
+                                },
+                                geo_cities: {
+                                    #[cfg(not(target_arch = "wasm32"))]
+                                    {
+                                        match &self.geo_data {
+                                            GeoLoadState::Loaded(d) => {
+                                                if show_cities {
+                                                    d.cities.as_slice()
+                                                } else {
+                                                    &[]
+                                                }
+                                            }
+                                            _ => &[],
                                         }
                                     }
-                                    _ => &[],
-                                }
+                                    #[cfg(target_arch = "wasm32")]
+                                    {
+                                        &[]
+                                    }
+                                },
+                                conjunction_lines: &conj_lines,
+                                conjunction_heatmap: &conj_heatmap,
+                                correcting_sats: &correcting_sats,
+                                hit_sats: &hit_sats,
+                                radiation: if show_radiation_belts || planet.show_radiation_window {
+                                    Some(&planet.radiation)
+                                } else {
+                                    None
+                                },
+                                moon_handles: &self.moon_image_handles,
+                                physics_colors: &physics_colors,
+                                physics_info: &physics_info,
+                                ground_tracks: &ground_tracks_vec,
+                                flash_intensities: &flash_intensities,
                             },
-                            #[cfg(target_arch = "wasm32")]
-                            &[],
-                            &conj_lines,
-                            &conj_heatmap,
-                            &correcting_sats,
-                            &hit_sats,
-                            if show_radiation_belts || planet.show_radiation_window {
-                                Some(&planet.radiation)
-                            } else {
-                                None
+                            Draw3dState {
+                                pending_cameras: &mut planet.pending_cameras,
+                                camera_id_counter: &mut self.camera_id_counter,
+                                satellite_cameras: &mut planet.satellite_cameras,
+                                cameras_to_remove: &mut planet.cameras_to_remove,
+                                pinned_isls: &mut planet.pinned_isls,
+                                ground_stations: &mut planet.ground_stations,
+                                areas_of_interest: &mut planet.areas_of_interest,
+                                dragging_place: &mut self.dragging_place,
+                                context_menu_request: &mut ctx_menu_req,
+                                label_click_request: &mut label_click_req,
                             },
-                            &self.moon_image_handles,
-                            &mut ctx_menu_req,
-                            &mut label_click_req,
-                            &physics_colors,
-                            &physics_info,
-                            &ground_tracks_vec,
-                            &flash_intensities,
                         );
                         {
                             // Strip the sun-fix rotation before saving so it

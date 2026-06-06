@@ -15,6 +15,7 @@ use std::collections::{HashMap, HashSet};
 pub type SatelliteKey = (usize, usize);
 pub type GroundTrackKey = (usize, usize, usize);
 pub type GroundTrackSample = (f64, f64, f64);
+#[cfg(not(target_arch = "wasm32"))]
 pub type IgrfRadiationJob = (
     f64,
     f64,
