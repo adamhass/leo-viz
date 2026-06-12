@@ -19,6 +19,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          lfs: false
+
+      - name: Fetch presentation assets
+        run: |
+          git lfs install --local --force
+          git lfs pull --include="assets/presentations/**" --exclude="textures/**"
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -38,6 +45,19 @@ jobs:
 
       - name: Build
         run: trunk build --release --cargo-profile release-wasm --public-url /leo-viz/
+
+      - name: Add route entrypoints
+        run: |
+          mkdir -p dist/demo dist/presentation
+          cp dist/index.html dist/demo/index.html
+          cp dist/index.html dist/presentation/index.html
+
+      - name: Check deployed slides are real SVGs
+        run: |
+          if grep -R "version https://git-lfs.github.com/spec/v1" dist/spacecomp-primer; then
+            echo "Presentation slides were deployed as Git LFS pointers" >&2
+            exit 1
+          fi
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
