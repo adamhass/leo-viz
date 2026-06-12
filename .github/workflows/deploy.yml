@@ -44,7 +44,7 @@ jobs:
           sed -i '/^leodos-bridge = /d' Cargo.toml
 
       - name: Build
-        run: trunk build --release --cargo-profile release-wasm --public-url /leo-viz/
+        run: trunk build --release --public-url /leo-viz/
 
       - name: Add route entrypoints
         run: |
