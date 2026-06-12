@@ -387,6 +387,15 @@ fn trace_field_line(r_km: f64, colat_rad: f64, elon_rad: f64) -> (f64, f64) {
     (l, b_over_b0)
 }
 
+pub(crate) fn igrf_particle_flux(r_km: f64, colat_rad: f64, elon_rad: f64) -> (f64, f64) {
+    use crate::aep8::{aep8_flux, Particle, SolarCycle};
+
+    let (l, bb0) = trace_field_line(r_km, colat_rad, elon_rad);
+    let protons = aep8_flux(10.0, l, bb0, Particle::Proton, SolarCycle::Max);
+    let electrons = aep8_flux(1.0, l, bb0, Particle::Electron, SolarCycle::Max);
+    (protons, electrons)
+}
+
 #[derive(Clone)]
 pub(crate) struct IgrfRadGrid {
     pub(crate) protons: Vec<f64>,

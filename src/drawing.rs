@@ -55,6 +55,44 @@ fn blend_proton_electron(
     crate::config::heatmap_color(pv.max(ev), smooth)
 }
 
+fn simple_radiation_intensity(
+    point_km: Vector3<f64>,
+    planet_radius_km: f64,
+    rad: &RadiationConfig,
+) -> f64 {
+    let dipole_tilt = rad.dipole_tilt.to_radians();
+    let tilt_lon = (-287.3_f64).to_radians();
+    let mag_axis = Vector3::new(
+        dipole_tilt.sin() * tilt_lon.cos(),
+        dipole_tilt.cos(),
+        dipole_tilt.sin() * tilt_lon.sin(),
+    )
+    .normalize();
+
+    let offset_lat = 22.0_f64.to_radians();
+    let offset_lon = (-140.0_f64).to_radians();
+    let dipole_offset = Vector3::new(
+        rad.dipole_offset_km * offset_lat.cos() * offset_lon.cos(),
+        rad.dipole_offset_km * offset_lat.sin(),
+        rad.dipole_offset_km * offset_lat.cos() * offset_lon.sin(),
+    );
+
+    let d = point_km - dipole_offset;
+    let r_d = d.norm();
+    let r_c = point_km.norm().max(1e-10);
+    let saa_factor = (r_d / r_c).powi(12);
+    let sin_ml = d.dot(&mag_axis) / r_d.max(1e-10);
+    let cos_ml_sq = 1.0 - sin_ml * sin_ml;
+    let r_d_er = r_d / planet_radius_km;
+    let l = if cos_ml_sq > 1e-6 {
+        r_d_er / cos_ml_sq
+    } else {
+        r_d_er * 1e6
+    };
+
+    (crate::radiation::belt_profile_r(l, rad.kp_index) * saa_factor).clamp(0.0, 1.0)
+}
+
 #[allow(dead_code)]
 fn igrf_rad_to_rgba(grid: &crate::igrf::IgrfRadGrid) -> Vec<u8> {
     let w = 181;
@@ -5387,6 +5425,14 @@ pub fn draw_3d_view(
                 let sphere_r = planet_radius + rc.heatmap_altitude_km;
 
                 let tip = match rc.heatmap_mode {
+                    crate::config::HeatmapMode::Radiation => {
+                        let point = orig.normalize() * sphere_r;
+                        let intensity = simple_radiation_intensity(point, planet_radius, rc);
+                        Some(format!(
+                            "{:.1}° {:.1}°\nRadiation: {:.3}",
+                            lat, lon, intensity
+                        ))
+                    }
                     crate::config::HeatmapMode::IgrfField => {
                         let f = crate::igrf::igrf_field_nt(sphere_r, colat, elon);
                         Some(format!("{:.1}° {:.1}°  F: {:.0} nT", lat, lon, f))
@@ -5399,7 +5445,11 @@ pub fn draw_3d_view(
                                 lat, lon, p, e
                             ))
                         } else {
-                            None
+                            let (p, e) = crate::igrf::igrf_particle_flux(sphere_r, colat, elon);
+                            Some(format!(
+                                "{:.1}° {:.1}°\nProton flux: {:.2e}\nElectron flux: {:.2e}",
+                                lat, lon, p, e
+                            ))
                         }
                     }
                     crate::config::HeatmapMode::FieldStrength => {
@@ -5409,7 +5459,6 @@ pub fn draw_3d_view(
                         let f = b0 / r_er.powi(3) * (1.0 + 3.0 * sin_ml * sin_ml).sqrt();
                         Some(format!("{:.1}° {:.1}°  F: {:.0} nT (dipole)", lat, lon, f))
                     }
-                    _ => None,
                 };
 
                 if let Some(text) = tip {
