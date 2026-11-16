@@ -22,9 +22,9 @@ struct Snapshot {
     layers: Vec<Arc<Preview>>,
     workload: Option<Workload>,
 }
-struct Loaded {
-    layers: Layers,
-    workload: Option<Workload>,
+pub(crate) struct Loaded {
+    pub(crate) layers: Layers,
+    pub(crate) workload: Option<Workload>,
 }
 #[derive(Deserialize)]
 struct SavedDocument {
@@ -636,6 +636,27 @@ fn load(path: &Path, current: Layers, mut progress: impl FnMut(String)) -> Resul
     let doc: SavedDocument =
         serde_json::from_slice(&json).map_err(|e| format!("Invalid preset: {e}"))?;
     drop(json);
+    prepare_document(doc, None, |_, message| progress(message))
+}
+
+pub(crate) fn load_embedded(
+    value: &serde_json::Value,
+    colors: Option<&std::collections::HashMap<String, [u8; 3]>>,
+    progress: impl FnMut(f32, String),
+) -> Result<Loaded, String> {
+    // Borrow the JSON tree; cloning 53k AOIs before parsing doubles temporary memory.
+    prepare_document(
+        SavedDocument::deserialize(value).map_err(|e| format!("Invalid embedded preset: {e}"))?,
+        colors,
+        progress,
+    )
+}
+
+fn prepare_document(
+    doc: SavedDocument,
+    colors: Option<&std::collections::HashMap<String, [u8; 3]>>,
+    mut progress: impl FnMut(f32, String),
+) -> Result<Loaded, String> {
     if doc.schema_version != 1
         || doc.preset_version.is_some_and(|v| v != 1)
         || doc.aois.is_empty()
@@ -661,6 +682,8 @@ fn load(path: &Path, current: Layers, mut progress: impl FnMut(String)) -> Resul
         groups[i].push(aoi);
     }
     let mut layers: Layers = std::array::from_fn(|_| None);
+    let total_aois = doc.config.count;
+    let mut completed = 0;
     for (i, aois) in groups.into_iter().enumerate() {
         if aois.is_empty() {
             continue;
@@ -674,31 +697,38 @@ fn load(path: &Path, current: Layers, mut progress: impl FnMut(String)) -> Resul
             count: aois.len(),
             source_seeds: BTreeMap::new(),
         };
-        let workers = leo_capture::parallel::worker_count(aois.len());
+        let count = aois.len();
+        let workers = leo_capture::parallel::worker_count(count);
         let mut last = std::time::Instant::now();
-        layers[i] = Some(Arc::new(Preview::from_document_parallel(
+        layers[i] = Some(Arc::new(Preview::from_document_parallel_colored(
             Document {
                 schema_version: 1,
                 config,
                 aois,
             },
             workers,
+            colors,
             |stage, done, total| {
                 if done == 0 || done == total || last.elapsed().as_millis() >= 100 {
-                    progress(format!(
-                        "{} · {stage}: {done} / {total} · {workers} CPU workers",
-                        KINDS[i]
-                    ));
+                    progress(
+                        0.94 * (completed + done) as f32 / total_aois as f32,
+                        format!(
+                            "{} · {stage}: {done} / {total} · {workers} CPU workers",
+                            KINDS[i]
+                        ),
+                    );
                     last = std::time::Instant::now();
                 }
             },
         )?));
+        completed += count;
     }
-    progress("Validating saved job assignments…".into());
+    progress(0.97, "Validating saved job assignments…".into());
     validate_workload(
         &workload,
         &layers.iter().flatten().cloned().collect::<Vec<_>>(),
     )?;
+    progress(1.0, "AOIs and jobs ready".into());
     Ok(Loaded { layers, workload })
 }
 
@@ -769,6 +799,12 @@ impl Panel {
     }
 }
 impl AoiGenerator {
+    pub(crate) fn install_replay_workload(&mut self, loaded: Loaded) {
+        self.pending = None;
+        self.storage.pending = None;
+        self.install_aois(loaded.layers);
+        self.jobs.restore_workload(loaded.workload);
+    }
     fn install_aois(&mut self, mut layers: Layers) {
         self.error = None;
         self.preview = layers[0].take();

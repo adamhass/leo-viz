@@ -37,6 +37,7 @@ mod revisit;
 mod satellite_catalogue;
 mod satellite_model;
 mod satellite_view;
+mod schedule_playback;
 mod settings;
 mod simulation_ui;
 mod slides;

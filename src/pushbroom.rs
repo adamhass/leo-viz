@@ -378,11 +378,11 @@ pub(crate) struct Overlay<'a> {
     polar_scale: f64,
 }
 
-const OBSERVABLE_COLOR: Color32 = Color32::from_rgb(72, 210, 245);
+pub(crate) const OBSERVABLE_COLOR: Color32 = Color32::from_rgb(72, 210, 245);
 
 /// Clip before tessellating dashes: work stays bounded by the viewport even
 /// when a ground segment projects to millions of pixels at extreme zoom.
-fn dashed_line(
+pub(crate) fn dashed_line(
     mesh: &mut Mesh,
     a: egui::Pos2,
     b: egui::Pos2,

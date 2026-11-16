@@ -3283,7 +3283,9 @@ impl ViewerState {
             } else {
                 0.0
             };
-            let timestamp = self.start_timestamp + chrono::Duration::seconds(time as i64);
+            let timestamp =
+                crate::schedule_playback::epoch(&self.tabs[tab_idx], self.start_timestamp)
+                    + chrono::Duration::seconds(time as i64);
             let day_of_year = timestamp.ordinal() as f64;
             let decl_rad = (crate::time::SOLAR_DECLINATION_MAX
                 * ((360.0 / crate::time::DAYS_PER_YEAR) * (day_of_year + 10.0))
@@ -4097,6 +4099,9 @@ impl ViewerState {
             available.y = available.y.min((clip.max.y - cursor.y).max(0.0));
             available
         };
+        let schedule = self.tabs[tab_idx].observation_replay.clone();
+        let replay_epoch =
+            crate::schedule_playback::epoch(&self.tabs[tab_idx], self.start_timestamp);
         let settings = &self.tabs[tab_idx].settings;
         let view_mode = settings.view_mode;
         let render_planet = view_mode == crate::config::ViewMode::Planet;
@@ -4166,7 +4171,14 @@ impl ViewerState {
         let zoom = search_camera.map_or(settings.zoom, |c| c.zoom);
         let earth_fixed_camera = search_camera.is_some() || settings.earth_fixed_camera;
         let sun_fixed_camera = search_camera.is_none() && settings.sun_fixed_camera;
-        let body_rot_angle = body_rotation_angle(celestial_body, time, self.current_gmst);
+        let local_gmst = if schedule.is_some() {
+            crate::time::greenwich_mean_sidereal_time(
+                replay_epoch + chrono::Duration::milliseconds((time * 1000.0) as i64),
+            )
+        } else {
+            self.current_gmst
+        };
+        let body_rot_angle = body_rotation_angle(celestial_body, time, local_gmst);
         let cos_a = body_rot_angle.cos();
         let sin_a = body_rot_angle.sin();
         let body_y_rotation = Matrix3::new(cos_a, 0.0, sin_a, 0.0, 1.0, 0.0, -sin_a, 0.0, cos_a);
@@ -4187,7 +4199,7 @@ impl ViewerState {
         // Uses `continuous_day_of_year` (not `ordinal()`) so sun_ra stays
         // exactly linear in sim time, matching the linear RAAN drift in walker.rs.
         let sun_y_rotation = if sun_fixed_camera {
-            let day_of_year = continuous_day_of_year(self.start_timestamp, time);
+            let day_of_year = continuous_day_of_year(replay_epoch, time);
             let sun_ra = ((day_of_year - 80.0) * 360.0 / DAYS_PER_YEAR).to_radians();
             let cy = sun_ra.cos();
             let sy = sun_ra.sin();
@@ -4288,7 +4300,10 @@ impl ViewerState {
                 if render_planet && !is_2d_projection {
                     ui.vertical(|ui| {
                         let planet = &mut self.tabs[tab_idx].planets[planet_idx];
-                        if celestial_body == CelestialBody::Earth && pushbroom_settings.visible() {
+                        if schedule.is_none()
+                            && celestial_body == CelestialBody::Earth
+                            && pushbroom_settings.visible()
+                        {
                             planet.pushbroom_history.update(
                                 time,
                                 &body_y_rotation,
@@ -4410,7 +4425,7 @@ impl ViewerState {
                             show_ground_tracks,
                         };
                         let sun_dir = {
-                            let day_of_year = continuous_day_of_year(self.start_timestamp, time);
+                            let day_of_year = continuous_day_of_year(replay_epoch, time);
                             // When sun-fixed camera is active, zero out the seasonal
                             // declination so the Sun traces the equator. This is
                             // unphysical (the Sun really moves on the ecliptic ±23.45°)
@@ -4602,6 +4617,7 @@ impl ViewerState {
                         let (rot, new_zoom) = draw_3d_view(
                             ui,
                             Draw3dInput {
+                                schedule: schedule.as_deref().map(|s| (s, pushbroom_settings)),
                                 search_highlight: planet.location_search.highlight(),
                                 observation_sampler: self
                                     .earth_observation
@@ -4609,9 +4625,13 @@ impl ViewerState {
                                 observation_marker: self
                                     .earth_observation
                                     .marker_for(tab_idx, planet_idx),
-                                generated_aois: self.aoi_generator.overlays(),
+                                generated_aois: schedule.as_ref().map_or_else(
+                                    || self.aoi_generator.overlays(),
+                                    |s| s.overlays(),
+                                ),
                                 selected_aoi: self.aoi_generator.jobs.selected(),
-                                pushbroom: if celestial_body == CelestialBody::Earth
+                                pushbroom: if schedule.is_none()
+                                    && celestial_body == CelestialBody::Earth
                                     && pushbroom_settings.visible()
                                 {
                                     Some((&planet.pushbroom_history, pushbroom_settings))
@@ -4839,7 +4859,9 @@ impl ViewerState {
                             planet_projection,
                             detail_bounds,
                             &if celestial_body == CelestialBody::Earth {
-                                self.aoi_generator.overlays()
+                                schedule
+                                    .as_ref()
+                                    .map_or_else(|| self.aoi_generator.overlays(), |s| s.overlays())
                             } else {
                                 Vec::new()
                             },
@@ -4848,6 +4870,7 @@ impl ViewerState {
                             &mut job_pick,
                             search_bounds,
                             planet.location_search.highlight(),
+                            schedule.as_deref().map(|s| (s, pushbroom_settings)),
                         );
                         if !job_pick.is_empty() {
                             self.aoi_generator.jobs.pick(job_pick);

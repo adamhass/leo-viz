@@ -1,21 +1,22 @@
-//! Finite acquisition DAGs, not a scheduler. Each action has a skip edge.
+//! Finite acquisition DAGs and an experimental scheduler in [`solver`].
+//! Each action has a skip edge.
 //! Crop polygons retain exact overlap information within the numerical geometry
 //! model. No centroid coverage, storage, processing or bandwidth constraints.
 mod export;
 mod graph;
+pub mod playback;
+pub mod solver;
 
 pub use export::{compact, generate, load_preset, Config, Summary};
 pub use graph::{Action, Topology};
 
-use crate::{
-    baseline, geometry,
-    workload::{Illumination, Job},
-};
+#[cfg(test)]
+use crate::workload::{Illumination, Job};
+use crate::{baseline, geometry};
+#[cfg(test)]
+use leo_sim::geometry::{ground_position, local_solar_time_hours, sun_direction};
 use leo_sim::{
-    geometry::{
-        dot, gmst, ground_position, local_solar_time_hours, sun_direction, Vector,
-        EARTH_RADIUS_KM as R,
-    },
+    geometry::{dot, gmst, Vector, EARTH_RADIUS_KM as R},
     orbit::Elements,
     worldview,
 };
@@ -38,7 +39,7 @@ impl Default for Options {
     fn default() -> Self {
         Self {
             duration_s: 86400.0,
-            step_s: 30.0,
+            step_s: 1.0,
             width_km: worldview::IMAGING_SWATH_KM,
             reach_km: worldview::ACCESS_WIDTH_KM,
             cross_spacing_km: worldview::IMAGING_SWATH_KM * 0.9,
@@ -55,7 +56,7 @@ impl Options {
             || self.duration_s <= 0.0
             || self.duration_s > 30.0 * 86400.0
             || !self.step_s.is_finite()
-            || !(1.0..=30.0).contains(&self.step_s)
+            || !(0.05..=30.0).contains(&self.step_s)
             || (self.duration_s / self.step_s - (self.duration_s / self.step_s).round()).abs()
                 > 1e-8
             || !self.width_km.is_finite()
@@ -185,7 +186,7 @@ impl Mode {
     }
 }
 
-fn sample(elements: &Elements, epoch: f64, t: f64) -> (Vector, Vector) {
+pub(crate) fn sample(elements: &Elements, epoch: f64, t: f64) -> (Vector, Vector) {
     let fixed = |time: f64| {
         let p = elements.sample(time).xyz;
         let (s, c) = gmst(epoch + time).sin_cos();
@@ -198,8 +199,9 @@ fn sample(elements: &Elements, epoch: f64, t: f64) -> (Vector, Vector) {
 
 /// Reject only if *every* cadence-clipped subinterval fails the same anchor
 /// time checks as the baseline. Polygon-vertex elevation checks still run later.
+#[cfg(test)]
 fn eligible(job: &Job, epoch: f64, start: f64, end: f64) -> bool {
-    let phase = job.acquisition.phase_hours * 3600.0;
+    let phase = job.acquisition.window_origin_s(job.cadence_hours);
     let cadence = job.cadence_hours * 3600.0;
     let mut left = start.max(phase);
     while left < end - 1e-9 {
@@ -207,6 +209,14 @@ fn eligible(job: &Job, epoch: f64, start: f64, end: f64) -> bool {
         let right = end.min(phase + (slot + 1.0) * cadence);
         if right <= left {
             break;
+        }
+        let (collection_start, _) = job
+            .acquisition
+            .collection_window_s(slot as u64, job.cadence_hours);
+        left = left.max(collection_start);
+        if left >= right - 1e-9 {
+            left = right;
+            continue;
         }
         if job.acquisition.illumination == Illumination::AnyTime {
             return true;

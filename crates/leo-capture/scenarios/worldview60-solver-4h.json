@@ -1,0 +1,9 @@
+{
+  "graph_directory": "../../../artifacts/scheduling-graphs/worldview60-24h-20261113",
+  "output": "../../../artifacts/scheduling-solutions/worldview60-4h-lagrangian-v1",
+  "horizon_s": 14400,
+  "iterations_per_priority": 6,
+  "samples_per_axis": 3,
+  "repair_sweeps": 1,
+  "workers": 4
+}

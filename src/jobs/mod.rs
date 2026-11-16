@@ -113,11 +113,16 @@ impl Panel {
             return Ok(None);
         }
         if !layers_match(&self.jobs, layers) {
-            return Err("Assigned jobs no longer match the AOIs. Reassign jobs before saving.".into());
+            return Err(
+                "Assigned jobs no longer match the AOIs. Reassign jobs before saving.".into(),
+            );
         }
         Ok(Some(leo_capture::storage::Document {
-            schema_version: 3,
-            generator: self.applied.clone().ok_or("Missing assigned job settings")?,
+            schema_version: 5,
+            generator: self
+                .applied
+                .clone()
+                .ok_or("Missing assigned job settings")?,
             capture,
             jobs: self.jobs.clone(),
         }))
@@ -126,6 +131,7 @@ impl Panel {
     /// Installation follows validation of the entire preset on the file worker.
     /// Existing capture sessions keep their immutable input snapshot.
     pub(crate) fn restore_workload(&mut self, document: Option<leo_capture::storage::Document>) {
+        self.assignment = None;
         self.hits.clear();
         self.selected = None;
         self.edit = None;

@@ -460,7 +460,7 @@ impl Session {
             serde_json::to_writer(
                 &mut gzip,
                 &Saved {
-                    schema_version: 2,
+                    schema_version: 4,
                     inputs: &self.inputs,
                     next_tick: self.next_tick,
                     positions_km: self.positions()?,
@@ -524,7 +524,7 @@ impl Session {
         };
         let checkpoint: Checkpoint = serde_json::from_reader(std::io::BufReader::new(reader))
             .map_err(|e| format!("Invalid capture checkpoint: {e}"))?;
-        if !(1..=2).contains(&checkpoint.schema_version) {
+        if !(1..=4).contains(&checkpoint.schema_version) {
             return Err("Unsupported capture checkpoint version".into());
         }
         let mut session = Self::prepare(checkpoint.inputs, |p| {

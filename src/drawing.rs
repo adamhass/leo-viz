@@ -1344,6 +1344,10 @@ fn format_capacity(bps: f64) -> String {
 }
 
 pub struct Draw3dInput<'a> {
+    pub schedule: Option<(
+        &'a crate::schedule_playback::Scene,
+        crate::pushbroom::Settings,
+    )>,
     pub search_highlight: Option<&'a crate::location_search::Place>,
     pub selected_aoi: Option<(&'a Arc<crate::aoi::preview::Preview>, usize)>,
     pub observation_sampler: bool,
@@ -1409,6 +1413,7 @@ pub fn draw_3d_view(
     state: Draw3dState<'_>,
 ) -> (Matrix3<f64>, f64) {
     let Draw3dInput {
+        schedule,
         search_highlight,
         selected_aoi,
         observation_sampler,
@@ -3885,6 +3890,18 @@ pub fn draw_3d_view(
             }
         }
 
+        if let Some((scene, settings)) = schedule {
+            plot_ui.add(
+                crate::schedule_playback::Overlay::new(
+                    scene,
+                    time,
+                    surface_rotation,
+                    planet_radius,
+                    flattening,
+                )
+                .with_settings(settings),
+            );
+        }
         for aoi in areas_of_interest {
             if let Some(gs_idx) = aoi.ground_station_idx {
                 if let Some(gs) = ground_stations.get(gs_idx) {
@@ -6302,6 +6319,7 @@ pub fn draw_map_view(
     job_pick: &mut Vec<crate::aoi::preview::Hit>,
     requested_bounds: Option<[f64; 4]>,
     search_highlight: Option<&crate::location_search::Place>,
+    schedule: Option<(&crate::schedule_playback::Scene, crate::pushbroom::Settings)>,
 ) -> [f64; 4] {
     let (xmin, xmax) = proj.x_range();
     let (ymin, ymax) = proj.y_range();
@@ -6358,6 +6376,12 @@ pub fn draw_map_view(
             );
         }
 
+        if let Some((scene, settings)) = schedule {
+            plot_ui.add(
+                crate::schedule_playback::Overlay::projected(scene, time, proj)
+                    .with_settings(settings),
+            );
+        }
         for aoi in areas_of_interest {
             let lat = aoi.lat.to_radians();
             let lon = aoi.lon.to_radians();
@@ -6891,6 +6915,7 @@ mod map_camera_tests {
                     ctx.data_mut(|data| {
                         data.remove_temp::<[f64; 4]>(egui::Id::new("requested_map_bounds"))
                     }),
+                    None,
                     None,
                 );
                 let transform = egui_plot::PlotMemory::load(ctx, plot_id)

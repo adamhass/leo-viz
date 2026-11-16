@@ -1,0 +1,310 @@
+{
+  "schema_version": 2,
+  "method": "lagrangian_acquisition_deadlines_with_polygon_verification",
+  "objective": "Maximize met acquisition deadlines by descending job priority, then partial coverage; each cadence window is independent.",
+  "semantics": {
+    "acquisition_request": "Required coverage for one job within one cadence window, with its own deadline.",
+    "excluded_job": "Outside the configured job scope; not optimized or assessed as missed or pending in this run. Captures may incidentally cover excluded jobs.",
+    "future_deadline": "Not due in this planning horizon; excluded from missed-deadline counts.",
+    "job": "An ongoing workload that remains active after any missed acquisition deadline.",
+    "missed_deadline": "A due acquisition request whose coverage is incomplete in the selected plan. A planning result, not an observed execution or weather failure.",
+    "opportunity": "An optional graph capture; not selecting it is not a failure."
+  },
+  "problem_size": {
+    "actions": 973789,
+    "coverage_witnesses": 129081,
+    "satellites": 60,
+    "solver_arcs": 8089428,
+    "solver_nodes": 1994180
+  },
+  "epoch_unix_s": 1794528000.0,
+  "graph_preset_hash_fnv1a64": 2210360759302158354,
+  "selected_candidate": "after_priority_1",
+  "verification": {
+    "by_cadence": [
+      {
+        "cadence_hours": 24.0,
+        "due_acquisition_deadlines": 13264,
+        "first_deadline_s_after_epoch_max": 86400.0,
+        "first_deadline_s_after_epoch_min": 86400.0,
+        "jobs": 13264,
+        "pending_acquisition_deadlines": 0
+      }
+    ],
+    "by_priority": [
+      {
+        "due_acquisition_deadlines": 2631,
+        "jobs_with_due_deadlines": 2631,
+        "missed_deadlines_with_no_coverage": 1137,
+        "missed_deadlines_with_partial_coverage": 672,
+        "planned_met_deadlines": 822,
+        "planned_miss_rate_percent": 68.75712656784492,
+        "planned_missed_deadlines": 1809,
+        "priority": 5
+      },
+      {
+        "due_acquisition_deadlines": 2665,
+        "jobs_with_due_deadlines": 2665,
+        "missed_deadlines_with_no_coverage": 2073,
+        "missed_deadlines_with_partial_coverage": 345,
+        "planned_met_deadlines": 247,
+        "planned_miss_rate_percent": 90.73170731707317,
+        "planned_missed_deadlines": 2418,
+        "priority": 4
+      },
+      {
+        "due_acquisition_deadlines": 2704,
+        "jobs_with_due_deadlines": 2704,
+        "missed_deadlines_with_no_coverage": 2180,
+        "missed_deadlines_with_partial_coverage": 348,
+        "planned_met_deadlines": 176,
+        "planned_miss_rate_percent": 93.49112426035504,
+        "planned_missed_deadlines": 2528,
+        "priority": 3
+      },
+      {
+        "due_acquisition_deadlines": 2700,
+        "jobs_with_due_deadlines": 2700,
+        "missed_deadlines_with_no_coverage": 2182,
+        "missed_deadlines_with_partial_coverage": 344,
+        "planned_met_deadlines": 174,
+        "planned_miss_rate_percent": 93.55555555555556,
+        "planned_missed_deadlines": 2526,
+        "priority": 2
+      },
+      {
+        "due_acquisition_deadlines": 2564,
+        "jobs_with_due_deadlines": 2564,
+        "missed_deadlines_with_no_coverage": 2157,
+        "missed_deadlines_with_partial_coverage": 289,
+        "planned_met_deadlines": 118,
+        "planned_miss_rate_percent": 95.3978159126365,
+        "planned_missed_deadlines": 2446,
+        "priority": 1
+      }
+    ],
+    "candidate": "after_priority_1",
+    "capture_count": 2012,
+    "coverage_verification": "polygon_union",
+    "deadline_assessment": "planned coverage, not executed acquisitions",
+    "due_acquisition_deadlines": 13264,
+    "jobs_excluded_from_run": 39736,
+    "jobs_in_scope": 13264,
+    "jobs_with_due_deadlines": 13264,
+    "jobs_without_due_deadlines": 0,
+    "missed_deadlines_with_no_coverage": 9729,
+    "missed_deadlines_with_partial_coverage": 1998,
+    "ongoing_jobs": 53000,
+    "path_feasibility": "passed",
+    "pending_acquisition_deadlines": 0,
+    "planned_met_deadlines": 1537,
+    "planned_miss_rate_percent": 88.41224366706875,
+    "planned_missed_deadlines": 11727,
+    "relative_area_tolerance": 1e-06,
+    "sampled_score": {
+      "complete_requests": [
+        1111,
+        307,
+        220,
+        209,
+        145
+      ],
+      "fractional_requests": 2633.3547984714983
+    },
+    "score": {
+      "complete_requests": [
+        822,
+        247,
+        176,
+        174,
+        118
+      ],
+      "fractional_requests": 2608.574709886675
+    }
+  },
+  "prepared_s": 29.345091811,
+  "search_s": 24.816277709,
+  "elapsed_s": 114.324174356,
+  "observed_process_memory_bytes": 328781824,
+  "limitations": [
+    "Adaptation of the publicly described Lagrangian decomposition; the paper's full heuristic details were not available. Not a reproduction of LRD-H.",
+    "Search uses spatial witnesses. Only polygon-verified completion counts are reported as actual completions. No optimality guarantee or original-problem optimality gap.",
+    "Incumbents are compared lexicographically by met acquisition deadlines at descending priority, then partial coverage. Missed requests neither fail nor drop ongoing jobs. This is a heuristic, not a proof of optimal deadline fulfilment.",
+    "Only cadence windows whose deadlines close within the chosen prefix are optimized. Pending weekly/monthly work has no reward in this experiment.",
+    "Feasibility is for the precomputed finite acquisition and maneuver model; storage, downlink, energy, processing and clouds remain unmodeled."
+  ],
+  "config_file": "worldview60-daily-only-24h.json",
+  "artifact_directory": "artifacts/scheduling-solutions/worldview60-24h-daily-only-v2",
+  "job_cadence_hours": 24,
+  "candidate_comparison": [
+    {
+      "candidate": "independent_paths_baseline",
+      "capture_count": 3375,
+      "planned_met_deadlines": 2214,
+      "planned_missed_deadlines": 11050,
+      "planned_miss_rate_percent": 83.30820265379975,
+      "score": {
+        "complete_requests": [
+          451,
+          445,
+          429,
+          455,
+          434
+        ],
+        "fractional_requests": 3845.9875941118753
+      },
+      "sampled_score": {
+        "complete_requests": [
+          545,
+          553,
+          552,
+          570,
+          532
+        ],
+        "fractional_requests": 3892.964862090729
+      }
+    },
+    {
+      "candidate": "after_priority_5",
+      "capture_count": 1674,
+      "planned_met_deadlines": 1255,
+      "planned_missed_deadlines": 12009,
+      "planned_miss_rate_percent": 90.53829915560917,
+      "score": {
+        "complete_requests": [
+          822,
+          110,
+          105,
+          115,
+          103
+        ],
+        "fractional_requests": 2269.8372256139255
+      },
+      "sampled_score": {
+        "complete_requests": [
+          1111,
+          134,
+          129,
+          137,
+          122
+        ],
+        "fractional_requests": 2290.7884856370406
+      }
+    },
+    {
+      "candidate": "after_priority_4",
+      "capture_count": 1829,
+      "planned_met_deadlines": 1387,
+      "planned_missed_deadlines": 11877,
+      "planned_miss_rate_percent": 89.54312424607961,
+      "score": {
+        "complete_requests": [
+          822,
+          237,
+          104,
+          115,
+          109
+        ],
+        "fractional_requests": 2421.388219324641
+      },
+      "sampled_score": {
+        "complete_requests": [
+          1111,
+          296,
+          129,
+          138,
+          129
+        ],
+        "fractional_requests": 2442.3271139438675
+      }
+    },
+    {
+      "candidate": "after_priority_3",
+      "capture_count": 1926,
+      "planned_met_deadlines": 1465,
+      "planned_missed_deadlines": 11799,
+      "planned_miss_rate_percent": 88.95506634499397,
+      "score": {
+        "complete_requests": [
+          822,
+          244,
+          173,
+          117,
+          109
+        ],
+        "fractional_requests": 2522.8898932730276
+      },
+      "sampled_score": {
+        "complete_requests": [
+          1111,
+          304,
+          216,
+          140,
+          128
+        ],
+        "fractional_requests": 2545.46098324558
+      }
+    },
+    {
+      "candidate": "after_priority_2",
+      "capture_count": 2006,
+      "planned_met_deadlines": 1530,
+      "planned_missed_deadlines": 11734,
+      "planned_miss_rate_percent": 88.46501809408926,
+      "score": {
+        "complete_requests": [
+          822,
+          247,
+          176,
+          174,
+          111
+        ],
+        "fractional_requests": 2597.6440205011413
+      },
+      "sampled_score": {
+        "complete_requests": [
+          1111,
+          307,
+          220,
+          209,
+          132
+        ],
+        "fractional_requests": 2621.7482122041215
+      }
+    },
+    {
+      "candidate": "after_priority_1",
+      "capture_count": 2012,
+      "planned_met_deadlines": 1537,
+      "planned_missed_deadlines": 11727,
+      "planned_miss_rate_percent": 88.41224366706875,
+      "score": {
+        "complete_requests": [
+          822,
+          247,
+          176,
+          174,
+          118
+        ],
+        "fractional_requests": 2608.574709886675
+      },
+      "sampled_score": {
+        "complete_requests": [
+          1111,
+          307,
+          220,
+          209,
+          145
+        ],
+        "fractional_requests": 2633.3547984714983
+      }
+    }
+  ],
+  "validation": {
+    "unit_tests_passed": 61,
+    "unit_tests_failed": 0,
+    "existing_scale_benchmarks_ignored": 3,
+    "independent_maneuver_timing_check": "passed for all 60 paths",
+    "daily_scope_and_deadline_count_checks": "passed for all candidate plans"
+  }
+}

@@ -1,5 +1,7 @@
 target/
 artifacts/scheduling-graphs/
+artifacts/scheduling-solutions/
+artifacts/job-design/
 dist/.stage/
 dist/
 

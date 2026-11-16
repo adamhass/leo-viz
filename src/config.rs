@@ -873,6 +873,8 @@ impl Default for TabSettings {
 }
 
 pub struct TabConfig {
+    pub(crate) observation_replay: Option<std::sync::Arc<crate::schedule_playback::Scene>>,
+    pub(crate) schedule_player: crate::schedule_playback::Panel,
     pub name: String,
     pub title: String,
     pub description: String,
@@ -970,6 +972,8 @@ impl TabConfig {
 
     pub fn new_empty(name: String) -> Self {
         Self {
+            observation_replay: None,
+            schedule_player: crate::schedule_playback::Panel::default(),
             name,
             title: String::new(),
             description: String::new(),

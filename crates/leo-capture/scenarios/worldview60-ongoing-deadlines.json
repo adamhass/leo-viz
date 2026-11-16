@@ -1,0 +1,9 @@
+{
+  "preset": "../../../artifacts/job-design/worldview60-20261113/preset.json.gz",
+  "output": "../../../artifacts/job-design/worldview60-ongoing-20261113",
+  "policy": {
+    "seed": 20261113,
+    "minimum_deadline_hours": 5
+  },
+  "report_horizon_hours": 24
+}

@@ -41,10 +41,16 @@ impl Panel {
         if !self.ensure_earth(tab) {
             self.open = false;
         }
+        if Self::available_for(tab) {
+            let mut player = std::mem::take(&mut tab.schedule_player);
+            player.poll(ctx, aoi, tab);
+            tab.schedule_player = player;
+        }
         if !self.open {
             self.suspend();
             return None;
         }
+        let epoch = crate::schedule_playback::epoch(tab, epoch);
         let mut request = None;
         #[allow(deprecated)]
         egui::Panel::right("observation-sidebar")
@@ -79,17 +85,33 @@ impl Panel {
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
                         ui.set_min_width(ui.available_width());
-                        aoi.presets_ui(ui, &mut tab.settings.observation_data);
+                        ui.add_enabled_ui(tab.observation_replay.is_none(), |ui| {
+                            aoi.presets_ui(ui, &mut tab.settings.observation_data);
+                        });
+                        egui::CollapsingHeader::new("Schedule playback")
+                            .id_salt("schedule-playback")
+                            .default_open(true)
+                            .show(ui, |ui| {
+                                let mut player = std::mem::take(&mut tab.schedule_player);
+                                player.ui(ui, tab);
+                                tab.schedule_player = player;
+                            });
                         ui.separator();
                         egui::CollapsingHeader::new("AOI Generator")
                             .id_salt("sidebar-aoi")
-                            .show(ui, |ui| aoi.ui(ui));
+                            .show(ui, |ui| {
+                                ui.add_enabled_ui(tab.observation_replay.is_none(), |ui| {
+                                    aoi.ui(ui)
+                                });
+                            });
                         ui.separator();
                         let model = egui::CollapsingHeader::new("Observation model")
                             .id_salt("sidebar-model")
                             .default_open(true)
                             .show(ui, |ui| {
-                                request = self.ui(ui, tab, tab_idx, epoch);
+                                ui.add_enabled_ui(tab.observation_replay.is_none(), |ui| {
+                                    request = self.ui(ui, tab, tab_idx, epoch);
+                                });
                             });
                         if model.body_returned.is_none() {
                             self.suspend();

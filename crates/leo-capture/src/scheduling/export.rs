@@ -1,4 +1,6 @@
-use super::{eligible, sample, Action, Mode, Options, Topology};
+#[cfg(test)]
+use super::eligible;
+use super::{sample, Action, Mode, Options, Topology};
 use crate::{
     baseline, dataset,
     geometry::{self, Atlas, Region},
@@ -38,6 +40,10 @@ pub struct Config {
     pub first_satellite: usize,
     #[serde(default = "default_satellites")]
     pub satellite_count: usize,
+    /// Keep only captures that can contribute to a deadline inside this horizon.
+    /// Shared future-deadline crops on retained captures are still recorded.
+    #[serde(default)]
+    pub only_actions_serving_due_deadlines: bool,
 }
 fn default_workers() -> usize {
     resources::worker_limit()
@@ -189,6 +195,8 @@ struct ActionRecord<'a> {
     id: u32,
     tick: u32,
     mode: usize,
+    start_s: f64,
+    end_s: f64,
     crops: &'a [CropRecord],
 }
 #[derive(Serialize)]
@@ -197,7 +205,10 @@ struct NodeRecord {
     tick: u32,
     mode: usize,
     next_same: Option<u32>,
+    start_s: f64,
+    end_s: f64,
     maneuver_to: Vec<u32>,
+    maneuver_duration_s: Vec<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     maneuver_hub: Option<usize>,
 }
@@ -212,16 +223,17 @@ fn write_graph(
         .join(format!("satellite-{id:03}.graph.jsonl.gz"));
     let part = path.with_extension("gz.part");
     let mut graph = writer(&part)?;
-    let source = topology.source_targets();
-    let hubs = topology.hubs();
     let base = 2 * topology.actions.len() + 2;
-    let nodes = base + hubs.as_ref().map_or(0, |h| h.hubs.len());
+    let nodes = base;
+    let source = topology.source_targets();
+    let source_slew: Vec<_> = source.iter().map(|&a| topology.source_slew_s(a)).collect();
     line(
         &mut graph,
-        &serde_json::json!({"schema_version":2,"satellite":id,"action_count":topology.actions.len(),
-        "source":base-2,"sink":base-1,"source_to":source,"nodes":nodes,
-        "transition_encoding":if hubs.is_some(){"shared_uniform_lag_hubs"}else{"direct"},
-        "rules":"Action a: start=2a,end=2a+1. Parallel capture/skip start->end; next_same and maneuver_to connect end->target start. maneuver_hub connects end->hub node; a hub's targets are action IDs. Last action in each mode connects end->sink. Source also connects directly to sink. source_to contains action IDs."}),
+        &serde_json::json!({"schema_version":3,"satellite":id,
+        "action_count":topology.actions.len(),"source":base-2,"sink":base-1,
+        "source_to":source,"source_maneuver_duration_s":source_slew,"nodes":nodes,
+        "transition_encoding":"direct_exact_seconds",
+        "rules":"Action a: start=2a,end=2a+1. Parallel capture/skip; next_same and maneuver_to connect end to target start. Direct maneuver durations are unrounded seconds, aligned with maneuver_to. Idle time is target.start_s - action.end_s - maneuver_duration_s. Source also connects to sink; final actions connect to sink."}),
     )?;
     let mut edges = 3 * topology.actions.len() as u64 + source.len() as u64 + 1;
     let mut maneuvers = 0;
@@ -229,85 +241,117 @@ fn write_graph(
         if id % 1024 == 0 {
             resources::check_memory()?;
         }
-        let targets = if hubs.is_some() {
-            Vec::new()
-        } else {
-            topology.targets(id)
-        };
-        let hub = hubs
-            .as_ref()
-            .and_then(|h| h.from_action[id])
-            .map(|h| base + h);
-        maneuvers += targets.len() as u64 + u64::from(hub.is_some());
+        let targets = topology.targets(id);
+        let durations = targets
+            .iter()
+            .map(|&to| topology.transition_s(id, to))
+            .collect();
+        maneuvers += targets.len() as u64;
         line(
             &mut graph,
             &NodeRecord {
                 action: id as u32,
                 tick: a.tick,
                 mode: a.mode,
+                start_s: a.start_s,
+                end_s: a.end_s,
                 next_same: topology.next_same[id],
                 maneuver_to: targets,
-                maneuver_hub: hub,
+                maneuver_duration_s: durations,
+                maneuver_hub: None,
             },
         )?;
-    }
-    if let Some(hubs) = hubs {
-        for (id, hub) in hubs.hubs.iter().enumerate() {
-            maneuvers += hub.targets.len() as u64;
-            line(
-                &mut graph,
-                &serde_json::json!({"hub":base+id,"ready_tick":hub.ready_tick,"targets":hub.targets}),
-            )?;
-        }
     }
     edges += maneuvers;
     let bytes = finish(graph, &part, &path)?;
     Ok((nodes as u64, edges, maneuvers, bytes))
 }
 
-fn masks(jobs: &[Job], config: &Config) -> Result<Vec<Vec<bool>>, String> {
-    let bytes = jobs.len() as u64 * u64::from(config.options.ticks());
-    if bytes > resources::memory_limit() / 3 {
-        return Err(
-            "Eligibility masks would exceed one third of the memory budget; shorten the horizon"
-                .into(),
-        );
+struct SolarMasks {
+    step_s: f64,
+    bits: Vec<Vec<bool>>,
+    due_bits: Option<Vec<Vec<bool>>>,
+    due_counts: Vec<usize>,
+}
+// A conservative one-minute prefilter shared across satellites. Exact cadence,
+// collection-window and solar/elevation checks happen in polygon generation.
+// Memory is independent of the finer imaging step (76 MB for 53k jobs / day).
+fn masks(jobs: &[Job], config: &Config) -> Result<SolarMasks, String> {
+    let step_s: f64 = 60.0;
+    let count = (config.options.duration_s / step_s).ceil() as u32;
+    let copies = if config.only_actions_serving_due_deadlines {
+        2
+    } else {
+        1
+    };
+    if jobs.len() as u64 * u64::from(count) * copies > resources::memory_limit() / 3 {
+        return Err("Solar prefilter exceeds the memory budget; shorten the horizon".into());
     }
-    parallel::map(
-        (0..config.options.ticks()).collect(),
+    let bits: Vec<Vec<bool>> = parallel::map(
+        (0..count).collect(),
         config.workers.min(resources::worker_limit()),
         |tick| {
-            let start = f64::from(tick) * config.options.step_s;
-            let end = start + config.options.step_s;
-            let hours = [start, (start + end) / 2.0, end].map(|t| {
-                local_solar_time_hours(
-                    ground_position(0.0, 0.0, 1.0, gmst(config.epoch_unix_s + t)),
-                    sun_direction(config.epoch_unix_s + t),
-                )
-            });
+            let mid = (f64::from(tick) + 0.5) * step_s;
+            let hour = local_solar_time_hours(
+                ground_position(0.0, 0.0, 1.0, gmst(config.epoch_unix_s + mid)),
+                sun_direction(config.epoch_unix_s + mid),
+            );
             Ok(jobs
                 .iter()
                 .map(|j| {
-                    let phase = j.acquisition.phase_hours * 3600.0;
-                    let cadence = j.cadence_hours * 3600.0;
-                    if start < phase
-                        || end
-                            > phase
-                                + (((start - phase) / cadence + 1e-10).floor() + 1.0) * cadence
-                                + 1e-9
+                    if j.acquisition.illumination == Illumination::AnyTime
+                        || (j.acquisition.fulfilment == crate::workload::Fulfilment::Mosaic
+                            && j.acquisition.mosaic_timing
+                                == crate::workload::MosaicTiming::CloseInTime)
                     {
-                        return eligible(j, config.epoch_unix_s, start, end);
+                        return true;
                     }
-                    j.acquisition.illumination == Illumination::AnyTime
-                        || hours.iter().all(|h| {
-                            j.acquisition
-                                .accepts((h + j.aoi.longitude / 15.0).rem_euclid(24.0), 90.0)
-                        })
+                    let local = (hour + j.aoi.longitude / 15.0).rem_euclid(24.0);
+                    let distance =
+                        ((local - j.acquisition.solar_time_hours + 12.0).rem_euclid(24.0) - 12.0)
+                            .abs();
+                    // Twice the half-interval motion allowance also covers solar drift.
+                    distance <= j.acquisition.solar_tolerance_hours + step_s / 3600.0
                 })
                 .collect())
         },
         |_, _| {},
-    )
+    )?;
+    let due_counts: Vec<_> = jobs
+        .iter()
+        .map(|j| {
+            j.acquisition
+                .deadline_counts(j.cadence_hours, config.options.duration_s)
+                .0
+        })
+        .collect();
+    let due_bits = config.only_actions_serving_due_deadlines.then(|| {
+        bits.iter()
+            .enumerate()
+            .map(|(tick, mask)| {
+                let start = tick as f64 * step_s;
+                let end = start + step_s + config.options.step_s;
+                mask.iter()
+                    .zip(jobs)
+                    .zip(&due_counts)
+                    .map(|((&solar, j), &due)| {
+                        solar
+                            && due > 0
+                            && start
+                                < j.acquisition
+                                    .deadline_s(due.saturating_sub(1) as u64, j.cadence_hours)
+                            && end > j.acquisition.collection_window_s(0, j.cadence_hours).0
+                    })
+                    .collect()
+            })
+            .collect()
+    });
+    Ok(SolarMasks {
+        step_s,
+        bits,
+        due_bits,
+        due_counts,
+    })
 }
 
 fn satellite(
@@ -315,7 +359,7 @@ fn satellite(
     jobs: &[Job],
     atlas: &Atlas,
     modes: &[Mode],
-    masks: &[Vec<bool>],
+    masks: &SolarMasks,
     id: usize,
     elements: Elements,
 ) -> Result<SatelliteSummary, String> {
@@ -338,15 +382,18 @@ fn satellite(
         let start = f64::from(tick) * config.options.step_s;
         let end = start + config.options.step_s;
         let next = sample(&elements, config.epoch_unix_s, end);
+        let mask_index = (start / masks.step_s).floor() as usize;
+        let mask = &masks.due_bits.as_ref().unwrap_or(&masks.bits)[mask_index];
         // No narrow-strip overlay if even the entire reach misses the atlas.
         if !atlas
             .candidates(previous.0, next.0, config.options.reach_km / (2.0 * R))
-            .is_empty()
+            .iter()
+            .all(|&p| !atlas.patches[p].pieces.iter().any(|piece| mask[piece.job]))
         {
             for (mode_id, mode) in modes.iter().enumerate() {
                 let (a, na) = mode.offset(previous.0, previous.1);
                 let (b, nb) = mode.offset(next.0, next.1);
-                let segment = baseline::segment(
+                let mut segment = baseline::segment(
                     jobs,
                     atlas,
                     config.epoch_unix_s,
@@ -359,8 +406,34 @@ fn satellite(
                     na,
                     b,
                     nb,
-                    Some(&masks[tick as usize]),
+                    Some(mask),
                 )?;
+                if config.only_actions_serving_due_deadlines {
+                    if !segment
+                        .ops
+                        .iter()
+                        .flat_map(|op| &op.crops)
+                        .any(|c| c.slot < masks.due_counts[c.job] as u64)
+                    {
+                        continue;
+                    }
+                    // Preserve incidental coverage of later deadlines too.
+                    segment = baseline::segment(
+                        jobs,
+                        atlas,
+                        config.epoch_unix_s,
+                        config.options.width_km / (2.0 * R),
+                        &options,
+                        id,
+                        start,
+                        end,
+                        a,
+                        na,
+                        b,
+                        nb,
+                        Some(&masks.bits[mask_index]),
+                    )?;
+                }
                 let mut crops = Vec::new();
                 for op in segment.ops {
                     for c in op.crops {
@@ -385,13 +458,12 @@ fn satellite(
                             id: action,
                             tick,
                             mode: mode_id,
+                            start_s: start,
+                            end_s: end,
                             crops: &crops,
                         },
                     )?;
-                    actions.push(Action {
-                        tick,
-                        mode: mode_id,
-                    });
+                    actions.push(Action::at_tick(tick, mode_id, config.options.step_s));
                 }
             }
         }
@@ -555,17 +627,17 @@ pub fn generate(config: &Config) -> Result<Summary, String> {
     let mut due_jobs = 0;
     let mut cadences = BTreeMap::new();
     for job in &jobs {
-        let count = (((config.options.duration_s - job.acquisition.phase_hours * 3600.0).max(0.0)
-            / (job.cadence_hours * 3600.0))
-            + 1e-10)
-            .floor() as u64;
+        let count = job
+            .acquisition
+            .deadline_counts(job.cadence_hours, config.options.duration_s)
+            .0 as u64;
         due += count;
         due_jobs += usize::from(count > 0);
         *cadences
             .entry(format!("{} h", job.cadence_hours))
             .or_insert(0) += 1;
     }
-    let summary=Summary {schema_version:2,status:"complete".into(),config:config.clone(),preset_hash_fnv1a64:checksum,
+    let summary=Summary {schema_version:3,status:"complete".into(),config:config.clone(),preset_hash_fnv1a64:checksum,
         job_count:jobs.len(),jobs_with_due_deadlines:due_jobs,due_observations:due,jobs_with_no_due_deadline:jobs.len()-due_jobs,
         jobs_with_candidates:seen.iter().filter(|x|**x).count(),cadence_job_counts:cadences,
         slew_rate_deg_s:config.options.slew_rate_rad_s().to_degrees(),modes,
@@ -580,9 +652,10 @@ pub fn generate(config: &Config) -> Result<Summary, String> {
             "WorldView-60: 20 planes x 3 satellites, F=14, 617 km, 97.9 degrees, J2; orbit epoch equals planning start. Not live spacecraft ephemerides.".into(),
             "Finite pointing modes follow the orbit in a nadir-relative frame, with constant along/cross ground offsets. Transitions use a time-invariant quaternion surrogate calibrated to the 200 km / 12 s example; the settling allowance is assumed. Tracking of the moving reference frame has no extra cost.".into(),
             "Candidate strips occupy one whole time step. Constant observation width and quality. Circular reach; modes conservatively reserve half the width at the boundary. Footprints use the existing swept-scanline polygon approximation.".into(),
-            "Fixed phase/cadence windows, mosaic span=cadence, shared captures allowed. Weekly/monthly opportunities are included even without a deadline in this horizon. No initial imagery or committed actions; initial pointing is nadir.".into(),
+            "Cadence delivery windows use either a legacy phase or an explicit ongoing-job next deadline; optional shorter mosaic collection spans end at each deadline. Solar-time and close-in-time gates apply. Shared captures allowed. No initial imagery or committed actions; initial pointing is nadir.".into(),
+            if config.only_actions_serving_due_deadlines {"Only actions serving a deadline due within the graph horizon are retained, with incidental future-deadline crops preserved. All job indices remain intact. Discarded zero-reward captures are unnecessary transit maneuvers under the time-invariant metric slew model with free waiting; this scope is only suitable for an objective rewarding deadlines in this horizon.".into()} else {"Opportunities are included for every job, even without a deadline in the graph horizon.".into()},
             "Every action may be skipped without earning its crop coverage. A wait spine retains the pointing mode. End-to-earliest-start transitions preserve all action subsequences of the dense graph for this finite model.".into(),
-            "When every mode change has the same rounded time-step lag, shared transition hubs preserve feasible acquisition sequences. Exact physical slew time is not an additive edge cost through those hubs; evaluate it from consecutive selected acquisitions if needed.".into(),
+            "Direct transitions compare explicit acquisition timestamps against the unrounded quaternion slew duration in seconds. Candidate imaging remains sampled at the configured step; maneuver duration is independent of that sampling.".into(),
             "No storage, bandwidth, processing, energy, or cloud constraints. No paths have been optimized and no job or mosaic feasibility verdict is implied. Candidate union is only an upper bound. Finer time/pointing sampling may change results.".into(),
             "Crop coordinates are km in each patch's spherical Lambert azimuthal equal-area chart. Charts are identified in charts.json. Job indices refer to the saved preset's workload.jobs order. Sharing requires polygon union, never sums of crop areas.".into(),
         ]};
@@ -636,7 +709,15 @@ pub fn compact(output: &Path) -> Result<Summary, String> {
                 if id != actions.len() as u64 {
                     return Err("Unordered action IDs".into());
                 }
+                let tick = u32::try_from(value["tick"].as_u64().ok_or("Invalid tick")?)
+                    .map_err(|e| e.to_string())?;
                 actions.push(Action {
+                    start_s: value["start_s"]
+                        .as_f64()
+                        .unwrap_or(f64::from(tick) * summary.config.options.step_s),
+                    end_s: value["end_s"]
+                        .as_f64()
+                        .unwrap_or(f64::from(tick + 1) * summary.config.options.step_s),
                     tick: u32::try_from(value["tick"].as_u64().ok_or("Invalid tick")?)
                         .map_err(|e| e.to_string())?,
                     mode: usize::try_from(value["mode"].as_u64().ok_or("Invalid mode")?)
@@ -655,7 +736,7 @@ pub fn compact(output: &Path) -> Result<Summary, String> {
         satellite.maneuver_edges = maneuvers;
         satellite.graph_bytes = bytes;
     }
-    summary.schema_version = 2;
+    summary.schema_version = 3;
     summary.status = "complete".into();
     summary.total_nodes = summary.satellites.iter().map(|s| s.nodes).sum();
     summary.total_edges = summary.satellites.iter().map(|s| s.edges).sum();
@@ -668,9 +749,9 @@ pub fn compact(output: &Path) -> Result<Summary, String> {
     if !summary
         .assumptions
         .iter()
-        .any(|a| a.contains("shared transition hubs"))
+        .any(|a| a.contains("Direct transitions compare"))
     {
-        summary.assumptions.push("When every mode change has the same rounded time-step lag, shared transition hubs preserve feasible acquisition sequences. Exact physical slew time is not an additive edge cost through those hubs; evaluate it from consecutive selected acquisitions if needed.".into());
+        summary.assumptions.push("Direct transitions compare explicit acquisition timestamps against the unrounded quaternion slew duration in seconds. Candidate imaging remains sampled at the configured step; maneuver duration is independent of that sampling.".into());
     }
     save(&summary)?;
     Ok(summary)
@@ -706,37 +787,34 @@ mod tests {
             .collect()
     }
     #[test]
-    fn cached_solar_masks_match_direct_geometry_including_phase_and_date_wrap() {
+    fn coarse_solar_prefilter_never_rejects_precise_eligible_intervals() {
         let config = Config {
             preset: PathBuf::new(),
             output: PathBuf::new(),
             epoch_unix_s: 1794528000.0,
             options: Options {
                 duration_s: 86400.0,
+                step_s: 30.0,
                 ..Default::default()
             },
             workers: 1,
             first_satellite: 0,
             satellite_count: 1,
+            only_actions_serving_due_deadlines: false,
         };
         let jobs = jobs();
         let masks = masks(&jobs, &config).unwrap();
-        for (tick, mask) in masks.iter().enumerate() {
-            for (j, &result) in jobs.iter().zip(mask) {
-                assert_eq!(
-                    result,
-                    eligible(
-                        j,
-                        config.epoch_unix_s,
-                        tick as f64 * 30.0,
-                        (tick + 1) as f64 * 30.0
-                    ),
-                    "tick {tick}, {}",
-                    j.aoi.longitude
-                );
+        for tick in 0..config.options.ticks() {
+            let start = f64::from(tick) * config.options.step_s;
+            let mask = &masks.bits[(start / masks.step_s).floor() as usize];
+            for (j, &allowed) in jobs.iter().zip(mask) {
+                if eligible(j, config.epoch_unix_s, start, start + config.options.step_s) {
+                    assert!(allowed, "prefilter rejected a usable interval");
+                }
             }
         }
     }
+
     #[test]
     fn exported_graph_has_shared_polygon_crops_and_preserves_saved_input() {
         let root = std::env::temp_dir().join(format!(
@@ -770,10 +848,11 @@ mod tests {
                 geometry_hash: hash(&serde_json::to_vec(&polygons).unwrap()),
             })
             .collect();
-        let generator = Generator::default();
+        let mut generator = Generator::default();
+        generator.bounds.cadence_min_hours = 1.0 / 60.0;
         let mut jobs = generator.generate(refs.clone()).unwrap();
         for j in &mut jobs {
-            j.cadence_hours = 4.0;
+            j.cadence_hours = 1.0 / 60.0;
             j.samples = 1;
             j.pipeline = Pipeline::Map;
             j.acquisition.illumination = Illumination::AnyTime;
@@ -791,7 +870,7 @@ mod tests {
             output: root.join("graph"),
             epoch_unix_s: epoch,
             options: Options {
-                duration_s: 60.0,
+                duration_s: 120.0,
                 reach_km: 40.0,
                 along_offsets_km: vec![0.0],
                 ..Default::default()
@@ -799,11 +878,12 @@ mod tests {
             workers: 1,
             first_satellite: 0,
             satellite_count: 1,
+            only_actions_serving_due_deadlines: false,
         };
         let summary = generate(&config).unwrap();
         assert!(summary.total_actions > 0);
         assert_eq!(summary.jobs_with_candidates, 2);
-        assert_eq!(summary.due_observations, 0);
+        assert_eq!(summary.due_observations, 3);
         assert_eq!(summary.total_nodes, summary.total_actions * 2 + 2);
         let content = GzDecoder::new(
             File::open(config.output.join("satellite-000.actions.jsonl.gz")).unwrap(),
@@ -827,9 +907,93 @@ mod tests {
                 }
             }
         }
+        let report = super::super::solver::solve(&super::super::solver::Config {
+            graph_directory: config.output.clone(),
+            output: root.join("solution"),
+            horizon_s: 120.0,
+            iterations_per_priority: 2,
+            workers: 1,
+            ..Default::default()
+        })
+        .unwrap();
+        assert_eq!(report["verification"]["due_acquisition_deadlines"], 3);
+        assert_eq!(report["verification"]["path_feasibility"], "passed");
+        assert!(report["verification"]["capture_count"].as_u64().unwrap() > 0);
+        let graph_header: serde_json::Value = serde_json::from_str(
+            &BufReader::new(GzDecoder::new(
+                File::open(config.output.join("satellite-000.graph.jsonl.gz")).unwrap(),
+            ))
+            .lines()
+            .next()
+            .unwrap()
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(graph_header["transition_encoding"], "direct_exact_seconds");
         assert_eq!(fs::read(&preset).unwrap(), before);
         let compacted = compact(&config.output).unwrap();
         assert_eq!(compacted.total_actions, summary.total_actions);
+        // An ongoing deadline inside an imaging second must split the geometry.
+        // Due-only pruning preserves exactly those full-graph actions (including
+        // incidental future coverage), without dropping original job indices.
+        let mut ongoing = doc.clone();
+        ongoing["workload"]["schema_version"] = serde_json::json!(5);
+        ongoing["workload"]["jobs"][0]["acquisition"]["first_deadline_hours"] =
+            serde_json::json!(15.4 / 3600.0);
+        ongoing["workload"]["jobs"][1]["cadence_hours"] = serde_json::json!(24.0);
+        ongoing["workload"]["jobs"][1]["acquisition"]["phase_hours"] = serde_json::json!(0.0);
+        let ongoing_preset = root.join("ongoing.json");
+        fs::write(&ongoing_preset, serde_json::to_vec(&ongoing).unwrap()).unwrap();
+        let mut ongoing_config = config.clone();
+        ongoing_config.preset = ongoing_preset;
+        ongoing_config.options.duration_s = 30.0;
+        ongoing_config.output = root.join("ongoing-full");
+        generate(&ongoing_config).unwrap();
+        let read_actions = |dir: &Path| -> Vec<serde_json::Value> {
+            BufReader::new(GzDecoder::new(
+                File::open(dir.join("satellite-000.actions.jsonl.gz")).unwrap(),
+            ))
+            .lines()
+            .map(|l| serde_json::from_str(&l.unwrap()).unwrap())
+            .collect()
+        };
+        let full = read_actions(&ongoing_config.output);
+        ongoing_config.output = root.join("ongoing-due");
+        ongoing_config.only_actions_serving_due_deadlines = true;
+        let pruned = generate(&ongoing_config).unwrap();
+        assert_eq!(pruned.job_count, 2);
+        assert_eq!(pruned.due_observations, 1);
+        let actual = read_actions(&ongoing_config.output);
+        let expected: Vec<_> = full
+            .iter()
+            .filter(|a| {
+                a["crops"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|c| c["job"] == 0 && c["slot"] == 0)
+            })
+            .collect();
+        assert!(actual.len() < full.len());
+        assert_eq!(actual.len(), expected.len());
+        for (a, b) in actual.iter().zip(expected) {
+            assert_eq!(a["tick"], b["tick"]);
+            assert_eq!(a["mode"], b["mode"]);
+            assert_eq!(a["crops"], b["crops"]);
+        }
+        let fractional = actual.iter().find(|a| a["tick"] == 15).unwrap();
+        let crops = fractional["crops"].as_array().unwrap();
+        assert!(crops.iter().any(|c| c["job"] == 1)); // Future job gets shared crops.
+        for slot in [0, 1] {
+            let c = crops
+                .iter()
+                .find(|c| c["job"] == 0 && c["slot"] == slot)
+                .unwrap();
+            let boundary = c[if slot == 0 { "end_s" } else { "start_s" }]
+                .as_f64()
+                .unwrap();
+            assert!((boundary - 15.4).abs() < 1e-8);
+        }
         assert_eq!(compacted.total_edges, summary.total_edges);
         assert!(generate(&config).err().unwrap().contains("new directory"));
         fs::remove_dir_all(root).unwrap();

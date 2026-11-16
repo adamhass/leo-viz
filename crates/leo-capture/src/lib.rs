@@ -1,6 +1,8 @@
 //! Application-level capture planning, independent of rendering and execution.
+pub mod admission;
 pub mod baseline;
 pub mod dataset;
+pub mod deadlines;
 pub mod geometry;
 pub mod parallel;
 pub mod resources;

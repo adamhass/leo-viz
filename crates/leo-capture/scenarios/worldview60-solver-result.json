@@ -1,0 +1,383 @@
+{
+  "schema_version": 1,
+  "method": "lagrangian_sampled_coverage_with_polygon_verification",
+  "reference": "https://doi.org/10.1016/j.ejor.2025.12.047",
+  "paper_access": "Public publisher preview; not a reproduction of unavailable full heuristic details.",
+  "source_preset_hash_fnv1a64": 2210360759302158354,
+  "tests": {
+    "passed": 55,
+    "failed": 0,
+    "ignored_scale_benchmarks": 3
+  },
+  "runs": [
+    {
+      "horizon_s": 14400.0,
+      "config": "worldview60-solver-4h.json",
+      "artifact_directory": "artifacts/scheduling-solutions/worldview60-4h-lagrangian-v1",
+      "problem_size": {
+        "actions": 159760,
+        "coverage_witnesses": 127947,
+        "satellites": 60,
+        "solver_arcs": 1313656,
+        "solver_nodes": 366122
+      },
+      "elapsed_s": 42.504669184,
+      "preparation_s": 15.962000096,
+      "search_s": 14.518697703,
+      "observed_process_memory_bytes": 199999488,
+      "selected_candidate": "after_priority_2",
+      "verification": {
+        "by_priority": [
+          {
+            "complete_jobs": 1098,
+            "complete_requests": 1098,
+            "due_jobs": 2698,
+            "due_requests": 2698,
+            "priority": 5
+          },
+          {
+            "complete_jobs": 385,
+            "complete_requests": 385,
+            "due_jobs": 2620,
+            "due_requests": 2620,
+            "priority": 4
+          },
+          {
+            "complete_jobs": 294,
+            "complete_requests": 294,
+            "due_jobs": 2536,
+            "due_requests": 2536,
+            "priority": 3
+          },
+          {
+            "complete_jobs": 273,
+            "complete_requests": 273,
+            "due_jobs": 2639,
+            "due_requests": 2639,
+            "priority": 2
+          },
+          {
+            "complete_jobs": 219,
+            "complete_requests": 219,
+            "due_jobs": 2677,
+            "due_requests": 2677,
+            "priority": 1
+          }
+        ],
+        "candidate": "after_priority_2",
+        "capture_count": 2676,
+        "complete_due_requests": 2269,
+        "coverage_verification": "polygon_union",
+        "due_requests": 13170,
+        "jobs_meeting_all_due_deadlines": 2269,
+        "jobs_with_due_deadlines": 13170,
+        "path_feasibility": "passed",
+        "relative_area_tolerance": 1e-06,
+        "sampled_score": {
+          "complete_jobs": [
+            1503,
+            546,
+            374,
+            342,
+            271
+          ],
+          "complete_requests": [
+            1503,
+            546,
+            374,
+            342,
+            271
+          ],
+          "fractional_requests": 4028.412613696593
+        },
+        "score": {
+          "complete_jobs": [
+            1098,
+            385,
+            294,
+            273,
+            219
+          ],
+          "complete_requests": [
+            1098,
+            385,
+            294,
+            273,
+            219
+          ],
+          "fractional_requests": 3994.466484515555
+        }
+      },
+      "independent_paths_baseline": {
+        "by_priority": [
+          {
+            "complete_jobs": 592,
+            "complete_requests": 592,
+            "due_jobs": 2698,
+            "due_requests": 2698,
+            "priority": 5
+          },
+          {
+            "complete_jobs": 567,
+            "complete_requests": 567,
+            "due_jobs": 2620,
+            "due_requests": 2620,
+            "priority": 4
+          },
+          {
+            "complete_jobs": 544,
+            "complete_requests": 544,
+            "due_jobs": 2536,
+            "due_requests": 2536,
+            "priority": 3
+          },
+          {
+            "complete_jobs": 565,
+            "complete_requests": 565,
+            "due_jobs": 2639,
+            "due_requests": 2639,
+            "priority": 2
+          },
+          {
+            "complete_jobs": 622,
+            "complete_requests": 622,
+            "due_jobs": 2677,
+            "due_requests": 2677,
+            "priority": 1
+          }
+        ],
+        "candidate": "independent_paths_baseline",
+        "capture_count": 4265,
+        "complete_due_requests": 2890,
+        "coverage_verification": "polygon_union",
+        "due_requests": 13170,
+        "jobs_meeting_all_due_deadlines": 2890,
+        "jobs_with_due_deadlines": 13170,
+        "path_feasibility": "passed",
+        "relative_area_tolerance": 1e-06,
+        "sampled_score": {
+          "complete_jobs": [
+            700,
+            708,
+            682,
+            698,
+            756
+          ],
+          "complete_requests": [
+            700,
+            708,
+            682,
+            698,
+            756
+          ],
+          "fractional_requests": 4739.17766869446
+        },
+        "score": {
+          "complete_jobs": [
+            592,
+            567,
+            544,
+            565,
+            622
+          ],
+          "complete_requests": [
+            592,
+            567,
+            544,
+            565,
+            622
+          ],
+          "fractional_requests": 4708.326926248587
+        }
+      },
+      "independent_maneuver_timing_check": "passed for all 60 paths"
+    },
+    {
+      "horizon_s": 86400.0,
+      "config": "worldview60-solver-24h.json",
+      "artifact_directory": "artifacts/scheduling-solutions/worldview60-24h-lagrangian-v1",
+      "problem_size": {
+        "actions": 973789,
+        "coverage_witnesses": 896763,
+        "satellites": 60,
+        "solver_arcs": 8089428,
+        "solver_nodes": 1994180
+      },
+      "elapsed_s": 146.063588209,
+      "preparation_s": 28.842141691,
+      "search_s": 48.61664913,
+      "observed_process_memory_bytes": 507236352,
+      "selected_candidate": "after_priority_1",
+      "verification": {
+        "by_priority": [
+          {
+            "complete_jobs": 1057,
+            "complete_requests": 5190,
+            "due_jobs": 5329,
+            "due_requests": 18819,
+            "priority": 5
+          },
+          {
+            "complete_jobs": 196,
+            "complete_requests": 1659,
+            "due_jobs": 5285,
+            "due_requests": 18385,
+            "priority": 4
+          },
+          {
+            "complete_jobs": 170,
+            "complete_requests": 1662,
+            "due_jobs": 5240,
+            "due_requests": 17920,
+            "priority": 3
+          },
+          {
+            "complete_jobs": 179,
+            "complete_requests": 1688,
+            "due_jobs": 5339,
+            "due_requests": 18534,
+            "priority": 2
+          },
+          {
+            "complete_jobs": 137,
+            "complete_requests": 2577,
+            "due_jobs": 5241,
+            "due_requests": 18626,
+            "priority": 1
+          }
+        ],
+        "candidate": "after_priority_1",
+        "capture_count": 15080,
+        "complete_due_requests": 12776,
+        "coverage_verification": "polygon_union",
+        "due_requests": 92284,
+        "jobs_meeting_all_due_deadlines": 1739,
+        "jobs_with_due_deadlines": 26434,
+        "path_feasibility": "passed",
+        "relative_area_tolerance": 1e-06,
+        "sampled_score": {
+          "complete_jobs": [
+            1566,
+            253,
+            215,
+            232,
+            177
+          ],
+          "complete_requests": [
+            6777,
+            2056,
+            2066,
+            2115,
+            3362
+          ],
+          "fractional_requests": 23410.80805571902
+        },
+        "score": {
+          "complete_jobs": [
+            1057,
+            196,
+            170,
+            179,
+            137
+          ],
+          "complete_requests": [
+            5190,
+            1659,
+            1662,
+            1688,
+            2577
+          ],
+          "fractional_requests": 23215.819736076744
+        }
+      },
+      "independent_paths_baseline": {
+        "by_priority": [
+          {
+            "complete_jobs": 535,
+            "complete_requests": 3776,
+            "due_jobs": 5329,
+            "due_requests": 18819,
+            "priority": 5
+          },
+          {
+            "complete_jobs": 556,
+            "complete_requests": 3758,
+            "due_jobs": 5285,
+            "due_requests": 18385,
+            "priority": 4
+          },
+          {
+            "complete_jobs": 540,
+            "complete_requests": 3503,
+            "due_jobs": 5240,
+            "due_requests": 17920,
+            "priority": 3
+          },
+          {
+            "complete_jobs": 548,
+            "complete_requests": 3708,
+            "due_jobs": 5339,
+            "due_requests": 18534,
+            "priority": 2
+          },
+          {
+            "complete_jobs": 559,
+            "complete_requests": 3834,
+            "due_jobs": 5241,
+            "due_requests": 18626,
+            "priority": 1
+          }
+        ],
+        "candidate": "independent_paths_baseline",
+        "capture_count": 25921,
+        "complete_due_requests": 18579,
+        "coverage_verification": "polygon_union",
+        "due_requests": 92284,
+        "jobs_meeting_all_due_deadlines": 2738,
+        "jobs_with_due_deadlines": 26434,
+        "path_feasibility": "passed",
+        "relative_area_tolerance": 1e-06,
+        "sampled_score": {
+          "complete_jobs": [
+            657,
+            685,
+            678,
+            692,
+            703
+          ],
+          "complete_requests": [
+            4566,
+            4554,
+            4340,
+            4550,
+            4688
+          ],
+          "fractional_requests": 31021.608437774936
+        },
+        "score": {
+          "complete_jobs": [
+            535,
+            556,
+            540,
+            548,
+            559
+          ],
+          "complete_requests": [
+            3776,
+            3758,
+            3503,
+            3708,
+            3834
+          ],
+          "fractional_requests": 30759.609748467898
+        }
+      },
+      "independent_maneuver_timing_check": "passed for all 60 paths"
+    }
+  ],
+  "limitations": [
+    "Heuristic search uses spatial witnesses; completions are certified by polygon union within the finite graph model.",
+    "Strict priority preference can reduce total completions. Baseline uses equal per-job witness reward and no inter-satellite coordination.",
+    "No certified optimality gap for the polygon problem. Pending deadlines outside each horizon are excluded."
+  ]
+}

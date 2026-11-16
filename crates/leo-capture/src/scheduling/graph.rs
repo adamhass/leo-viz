@@ -3,29 +3,33 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct Action {
+    /// Sampling index, retained for file compatibility; timing uses seconds.
     pub tick: u32,
     pub mode: usize,
+    pub start_s: f64,
+    pub end_s: f64,
+}
+impl Action {
+    pub fn at_tick(tick: u32, mode: usize, step_s: f64) -> Self {
+        Self {
+            tick,
+            mode,
+            start_s: f64::from(tick) * step_s,
+            end_s: f64::from(tick + 1) * step_s,
+        }
+    }
 }
 
-/// Action a has nodes (2a=start, 2a+1=end), with parallel capture and skip
-/// edges. Along each mode, end -> next start is a waiting edge. From each end
-/// we only need the earliest reachable start in every *other* mode: waiting
-/// along that mode reaches every later action without acquiring intervening ones.
-/// This is exact for the finite action set and the time-invariant mode slew law.
+/// Exact transition feasibility for the finite candidate set and configured
+/// quaternion slew law. Durations are never rounded to an imaging time step.
+/// Nonoverlapping candidates in each mode form a wait/skip spine; only the
+/// earliest reachable action in each other mode needs a direct transition.
 pub struct Topology {
     pub actions: Vec<Action>,
     pub next_same: Vec<Option<u32>>,
     by_mode: Vec<Vec<u32>>,
-    lag: Vec<Vec<u32>>,
-    initial_lag: Vec<u32>,
-}
-pub struct Hub {
-    pub ready_tick: u32,
-    pub targets: Vec<u32>,
-}
-pub struct Hubs {
-    pub from_action: Vec<Option<usize>>,
-    pub hubs: Vec<Hub>,
+    slew_s: Vec<Vec<f64>>,
+    initial_slew_s: Vec<f64>,
 }
 impl Topology {
     pub fn new(actions: Vec<Action>, modes: &[Mode], options: &Options) -> Result<Self, String> {
@@ -34,15 +38,21 @@ impl Topology {
         }
         let mut by_mode = vec![Vec::new(); modes.len()];
         for (i, a) in actions.iter().enumerate() {
-            if a.mode >= modes.len() || a.tick >= options.ticks() {
-                return Err("Invalid action".into());
+            if a.mode >= modes.len()
+                || !a.start_s.is_finite()
+                || !a.end_s.is_finite()
+                || a.start_s < 0.0
+                || a.end_s <= a.start_s
+                || a.end_s > options.duration_s + 1e-9
+            {
+                return Err("Invalid action interval".into());
             }
             let ids = &mut by_mode[a.mode];
             if ids
                 .last()
-                .is_some_and(|&p| actions[p as usize].tick >= a.tick)
+                .is_some_and(|&p| actions[p as usize].end_s > a.start_s + 1e-9)
             {
-                return Err("Actions must be ordered, unique within mode".into());
+                return Err("Actions must be ordered and nonoverlapping within each mode".into());
             }
             ids.push(i as u32);
         }
@@ -52,95 +62,58 @@ impl Topology {
                 next_same[pair[0] as usize] = Some(pair[1]);
             }
         }
-        let ticks = |s: f64| ((s / options.step_s - 1e-10).ceil().max(0.0)) as u32;
-        let lag = modes
+        let slew_s = modes
             .iter()
-            .map(|a| {
-                modes
-                    .iter()
-                    .map(|b| ticks(a.transition_s(b, options)))
-                    .collect()
-            })
+            .map(|a| modes.iter().map(|b| a.transition_s(b, options)).collect())
             .collect();
         let nadir = Mode::new(0.0, 0.0);
-        let initial_lag = modes
+        let initial_slew_s = modes
             .iter()
-            .map(|m| ticks(nadir.transition_s(m, options)))
+            .map(|m| nadir.transition_s(m, options))
             .collect();
         Ok(Self {
             actions,
             next_same,
             by_mode,
-            lag,
-            initial_lag,
+            slew_s,
+            initial_slew_s,
         })
     }
-    fn first(&self, mode: usize, ready: u32) -> Option<u32> {
+    fn first(&self, mode: usize, ready_s: f64) -> Option<u32> {
         let ids = &self.by_mode[mode];
-        ids.get(ids.partition_point(|&a| self.actions[a as usize].tick < ready))
+        ids.get(ids.partition_point(|&a| self.actions[a as usize].start_s + 1e-9 < ready_s))
             .copied()
     }
     pub fn source_targets(&self) -> Vec<u32> {
         (0..self.by_mode.len())
-            .filter_map(|m| self.first(m, self.initial_lag[m]))
+            .filter_map(|m| self.first(m, self.initial_slew_s[m]))
             .collect()
+    }
+    pub fn source_slew_s(&self, target: u32) -> f64 {
+        self.initial_slew_s[self.actions[target as usize].mode]
+    }
+    pub fn transition_s(&self, from: usize, to: u32) -> f64 {
+        self.slew_s[self.actions[from].mode][self.actions[to as usize].mode]
     }
     pub fn targets(&self, id: usize) -> Vec<u32> {
         let a = self.actions[id];
         (0..self.by_mode.len())
             .filter(|&m| m != a.mode)
-            .filter_map(|m| self.first(m, a.tick + 1 + self.lag[a.mode][m]))
+            .filter_map(|m| self.first(m, a.end_s + self.slew_s[a.mode][m]))
             .collect()
     }
-    /// With coarse time steps all changes can have the same rounded lag. Factor
-    /// their identical successor sets through a time-only choice node. The
-    /// delayed same-mode choice is redundant with its wait spine and harmless.
-    /// This preserves feasibility, not an additive exact physical slew cost.
-    pub fn hubs(&self) -> Option<Hubs> {
-        let lag = *self.lag.first()?.get(1)?;
-        if self
-            .lag
-            .iter()
-            .enumerate()
-            .any(|(a, row)| row.iter().enumerate().any(|(b, &n)| a != b && n != lag))
-        {
-            return None;
-        }
-        let mut by_tick = std::collections::BTreeMap::new();
-        for a in &self.actions {
-            by_tick.entry(a.tick + 1 + lag).or_insert(None);
-        }
-        let mut hubs = Vec::new();
-        for (&ready, index) in &mut by_tick {
-            let targets: Vec<_> = (0..self.by_mode.len())
-                .filter_map(|m| self.first(m, ready))
-                .collect();
-            if !targets.is_empty() {
-                *index = Some(hubs.len());
-                hubs.push(Hub {
-                    ready_tick: ready,
-                    targets,
-                });
-            }
-        }
-        Some(Hubs {
-            from_action: self
-                .actions
-                .iter()
-                .map(|a| by_tick[&(a.tick + 1 + lag)])
-                .collect(),
-            hubs,
-        })
-    }
-    /// All candidate endpoints need a source-reachable path before receiving
-    /// acquisition credit. The exported graph may also contain unreachable nodes.
     pub fn reachable(&self) -> Vec<bool> {
         let mut reachable = vec![false; self.actions.len()];
         for a in self.source_targets() {
             reachable[a as usize] = true;
         }
         let mut order: Vec<_> = (0..self.actions.len()).collect();
-        order.sort_by_key(|&i| (self.actions[i].tick, i));
+        order.sort_by(|&a, &b| {
+            self.actions[a]
+                .start_s
+                .total_cmp(&self.actions[b].start_s)
+                .then(a.cmp(&b))
+        });
         for id in order {
             if !reachable[id] {
                 continue;
@@ -181,7 +154,7 @@ mod tests {
                     t.actions
                         .iter()
                         .enumerate()
-                        .filter(|(_, b)| b.tick >= a.tick + 1 + t.lag[a.mode][b.mode])
+                        .filter(|(_, b)| b.start_s + 1e-9 >= a.end_s + t.slew_s[a.mode][b.mode])
                         .map(|(i, _)| i as u32)
                         .collect()
                 };
@@ -200,7 +173,7 @@ mod tests {
             t.actions
                 .iter()
                 .enumerate()
-                .filter(|(_, a)| a.tick >= t.initial_lag[a.mode])
+                .filter(|(_, a)| a.start_s + 1e-9 >= t.initial_slew_s[a.mode])
                 .map(|(i, _)| i as u32)
                 .collect()
         };
@@ -210,69 +183,20 @@ mod tests {
         out
     }
     #[test]
-    fn shared_hubs_have_exactly_the_same_reachable_next_actions_after_waiting() {
-        let o = Options {
-            duration_s: 360.0,
-            ..Default::default()
-        };
-        let modes = vec![
-            Mode::new(0.0, 0.0),
-            Mode::new(0.0, 100.0),
-            Mode::new(150.0, 0.0),
-        ];
-        let actions: Vec<_> = (0..12)
-            .flat_map(|tick| {
-                (0..3)
-                    .filter(move |mode| (tick + mode) % 3 != 1)
-                    .map(move |mode| Action {
-                        tick: tick as u32,
-                        mode,
-                    })
-            })
-            .collect();
-        let t = Topology::new(actions, &modes, &o).unwrap();
-        let h = t.hubs().unwrap();
-        for (id, a) in t.actions.iter().enumerate() {
-            let mut reachable = std::collections::BTreeSet::new();
-            let mut todo: Vec<_> = t.next_same[id]
-                .into_iter()
-                .chain(
-                    h.from_action[id]
-                        .into_iter()
-                        .flat_map(|i| h.hubs[i].targets.iter().copied()),
-                )
-                .collect();
-            while let Some(n) = todo.pop() {
-                if reachable.insert(n) {
-                    if let Some(next) = t.next_same[n as usize] {
-                        todo.push(next);
-                    }
-                }
-            }
-            let dense: std::collections::BTreeSet<_> = t
-                .actions
-                .iter()
-                .enumerate()
-                .filter(|(_, b)| b.tick >= a.tick + 1 + t.lag[a.mode][b.mode])
-                .map(|(i, _)| i as u32)
-                .collect();
-            assert_eq!(reachable, dense);
-        }
-    }
-    #[test]
     fn sparse_wait_spines_preserve_every_dense_capture_sequence() {
         let o = Options {
             duration_s: 180.0,
+            step_s: 30.0,
             ..Default::default()
         };
         let modes = vec![Mode::new(0.0, 0.0), Mode::new(0.0, 100.0)];
         let actions = vec![
-            Action { tick: 0, mode: 0 },
-            Action { tick: 1, mode: 0 },
-            Action { tick: 1, mode: 1 },
-            Action { tick: 2, mode: 1 },
-            Action { tick: 4, mode: 0 },
-            Action { tick: 5, mode: 1 },
+            Action::at_tick(0, 0, 30.0),
+            Action::at_tick(1, 0, 30.0),
+            Action::at_tick(1, 1, 30.0),
+            Action::at_tick(2, 1, 30.0),
+            Action::at_tick(4, 0, 30.0),
+            Action::at_tick(5, 1, 30.0),
         ];
         let t = Topology::new(actions, &modes, &o).unwrap();
         assert_eq!(paths(&t, true), paths(&t, false));
@@ -284,17 +208,69 @@ mod tests {
     fn initial_pointing_and_long_idle_gaps() {
         let o = Options {
             duration_s: 600.0,
+            step_s: 30.0,
             ..Default::default()
         };
         let modes = vec![Mode::new(0.0, 0.0), Mode::new(0.0, 200.0)];
         let t = Topology::new(
-            vec![Action { tick: 0, mode: 1 }, Action { tick: 10, mode: 1 }],
+            vec![Action::at_tick(0, 1, 30.0), Action::at_tick(10, 1, 30.0)],
             &modes,
             &o,
         )
         .unwrap();
         assert_eq!(t.reachable(), vec![false, true]);
         assert_eq!(t.source_targets(), vec![1]);
+        assert_eq!(paths(&t, true), paths(&t, false));
+    }
+    #[test]
+    fn fractional_slews_admit_small_adjustments_without_a_thirty_second_gap() {
+        let o = Options {
+            duration_s: 100.0,
+            ..Default::default()
+        };
+        let modes = [
+            Mode::new(0.0, 0.0),
+            Mode::new(0.0, 11.79),
+            Mode::new(0.0, 200.0),
+        ];
+        let small = modes[0].transition_s(&modes[1], &o);
+        let large = modes[0].transition_s(&modes[2], &o);
+        assert!(small < large && small < 3.0);
+        let actions = vec![
+            Action {
+                tick: 0,
+                mode: 0,
+                start_s: 0.0,
+                end_s: 0.75,
+            },
+            Action {
+                tick: 1,
+                mode: 1,
+                start_s: 0.75 + small - 0.01,
+                end_s: 0.75 + small - 0.005,
+            },
+            Action {
+                tick: 2,
+                mode: 1,
+                start_s: 0.75 + small,
+                end_s: 1.75 + small,
+            },
+            Action {
+                tick: 3,
+                mode: 2,
+                start_s: 0.75 + small,
+                end_s: 1.75 + small,
+            },
+            Action {
+                tick: 4,
+                mode: 2,
+                start_s: 0.75 + large,
+                end_s: 1.75 + large,
+            },
+        ];
+        let t = Topology::new(actions, &modes, &o).unwrap();
+        assert_eq!(t.targets(0), vec![2, 4]);
+        assert!((t.transition_s(0, 2) - small).abs() < 1e-12);
         assert_eq!(paths(&t, true), paths(&t, false));
     }
 }

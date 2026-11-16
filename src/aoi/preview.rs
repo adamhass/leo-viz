@@ -469,6 +469,16 @@ impl Preview {
     pub(super) fn from_document_parallel(
         doc: Document,
         workers: usize,
+        progress: impl FnMut(&'static str, usize, usize),
+    ) -> Result<Self, String> {
+        Self::from_document_parallel_colored(doc, workers, None, progress)
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub(super) fn from_document_parallel_colored(
+        doc: Document,
+        workers: usize,
+        colors: Option<&std::collections::HashMap<String, [u8; 3]>>,
         mut progress: impl FnMut(&'static str, usize, usize),
     ) -> Result<Self, String> {
         doc.validate()?;
@@ -476,7 +486,13 @@ impl Preview {
         let prepared = leo_capture::parallel::map(
             doc.aois.into_iter().enumerate().collect(),
             workers,
-            |(index, aoi)| Self::prepare_record(aoi, index),
+            |(index, aoi)| {
+                let mut prepared = Self::prepare_record(aoi, index)?;
+                if let Some(color) = colors.and_then(|c| c.get(&prepared.aoi.key())) {
+                    prepared.boundary.color = *color;
+                }
+                Ok(prepared)
+            },
             |done, total| progress("Preparing saved geometry", done, total),
         )?;
         let mut preview = Self::empty(total, doc.config.seed);
@@ -1734,6 +1750,38 @@ mod tests {
             },
         )
         .unwrap();
+        let colors: std::collections::HashMap<_, _> = serial
+            .aois
+            .iter()
+            .enumerate()
+            .map(|(i, a)| {
+                (
+                    a.key(),
+                    if i % 2 == 0 {
+                        [255, 75, 75]
+                    } else {
+                        [75, 82, 92]
+                    },
+                )
+            })
+            .collect();
+        let colored = Preview::from_document_parallel_colored(
+            serde_json::from_slice(&json).unwrap(),
+            3,
+            Some(&colors),
+            |_, _, _| {},
+        )
+        .unwrap();
+        assert_eq!(
+            serial.aois, colored.aois,
+            "Replay coloring must preserve job/geometry identity"
+        );
+        let gpu = colored.gpu_geometry();
+        for (i, aoi) in colored.aois.iter().enumerate() {
+            let rgb = colors[&aoi.key()];
+            assert_eq!(gpu.dots[i].color, [rgb[0], rgb[1], rgb[2], 255]);
+            assert_eq!(colored.boundaries[i].color, rgb);
+        }
         assert_eq!(serial.aois, parallel.aois);
         assert_eq!(serial.aois[0].id, "aoi-00000000");
         assert_eq!(serial.edge_count, parallel.edge_count);

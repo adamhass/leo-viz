@@ -20,6 +20,26 @@ impl Fulfilment {
     }
 }
 
+/// Mosaic timing is independent of delivery cadence and admission priority.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MosaicTiming {
+    /// Preserve historical workloads: solar gating and a full cadence window.
+    #[default]
+    CadenceWindow,
+    SimilarSolarTime,
+    CloseInTime,
+}
+impl MosaicTiming {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::CadenceWindow => "Legacy cadence window",
+            Self::SimilarSolarTime => "Similar local solar time",
+            Self::CloseInTime => "Close in elapsed time",
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Illumination {
@@ -44,16 +64,24 @@ impl Illumination {
     }
 }
 
-/// Cadence slots start at run start + phase; all pieces must be acquired within
-/// that slot. No observation is carried into another slot. Local solar time is
+/// Cadence slots start at run start + phase, or one cadence before an explicit
+/// next deadline for ongoing jobs. No observation is carried into another slot. Local solar time is
 /// circular (e.g. 23:30 ± 1 h includes 00:15), not civil time or satellite eclipse.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Acquisition {
     pub fulfilment: Fulfilment,
+    pub mosaic_timing: MosaicTiming,
+    /// Collection window ending at each delivery deadline. None preserves the
+    /// full cadence window. Independent crops do not require mosaic coherence.
+    pub mosaic_span_hours: Option<f64>,
+    pub admission: Option<crate::admission::Basis>,
     /// Larger values have strictly higher admission priority. Ties use job ID.
     pub priority: u16,
     pub phase_hours: f64,
+    /// Ongoing workload: next deadline after planning start, followed by cadence.
+    /// None preserves the legacy phase + cadence first deadline.
+    pub first_deadline_hours: Option<f64>,
     pub illumination: Illumination,
     pub solar_time_hours: f64,
     pub solar_tolerance_hours: f64,
@@ -63,8 +91,12 @@ impl Default for Acquisition {
     fn default() -> Self {
         Self {
             fulfilment: Fulfilment::Independent,
+            mosaic_timing: MosaicTiming::CadenceWindow,
+            mosaic_span_hours: None,
+            admission: None,
             priority: 1,
             phase_hours: 0.0,
+            first_deadline_hours: None,
             illumination: Illumination::Daylight,
             solar_time_hours: 12.0,
             solar_tolerance_hours: 1.0,
@@ -74,7 +106,13 @@ impl Default for Acquisition {
 }
 impl Acquisition {
     pub fn validate(&self, cadence: f64) -> Result<(), String> {
-        if !self.phase_hours.is_finite()
+        if self
+            .first_deadline_hours
+            .is_some_and(|d| !d.is_finite() || d <= 0.0 || d > cadence)
+            || self
+                .mosaic_span_hours
+                .is_some_and(|span| !span.is_finite() || span <= 0.0 || span > cadence)
+            || !self.phase_hours.is_finite()
             || self.phase_hours < 0.0
             || self.phase_hours >= cadence
             || !self.solar_time_hours.is_finite()
@@ -85,7 +123,7 @@ impl Acquisition {
             || !(0.0..=90.0).contains(&self.min_solar_elevation_deg)
         {
             return Err(
-                "Invalid acquisition phase, local solar time, tolerance or minimum elevation."
+                "Invalid acquisition deadline, collection span, phase, local solar time, tolerance or minimum elevation."
                     .into(),
             );
         }
@@ -96,12 +134,65 @@ impl Acquisition {
             return true;
         }
         let distance = ((solar_hours - self.solar_time_hours + 12.0).rem_euclid(24.0) - 12.0).abs();
-        elevation_deg >= self.min_solar_elevation_deg && distance <= self.solar_tolerance_hours
+        elevation_deg >= self.min_solar_elevation_deg
+            && (self.fulfilment == Fulfilment::Mosaic
+                && self.mosaic_timing == MosaicTiming::CloseInTime
+                || distance <= self.solar_tolerance_hours)
+    }
+    pub fn collection_window_s(&self, slot: u64, cadence_hours: f64) -> (f64, f64) {
+        let end = self.deadline_s(slot, cadence_hours);
+        let span = if self.fulfilment == Fulfilment::Mosaic {
+            self.mosaic_span_hours.unwrap_or(cadence_hours)
+        } else {
+            cadence_hours
+        };
+        (end - span * 3600.0, end)
+    }
+    pub fn first_deadline_s(&self, cadence_hours: f64) -> f64 {
+        self.first_deadline_hours
+            .unwrap_or(self.phase_hours + cadence_hours)
+            * 3600.0
+    }
+    /// May precede planning time zero for an already-running job. Slot zero is
+    /// the current cycle; past cycles and past imagery are not manufactured.
+    pub fn window_origin_s(&self, cadence_hours: f64) -> f64 {
+        self.first_deadline_s(cadence_hours) - cadence_hours * 3600.0
+    }
+    pub fn deadline_s(&self, slot: u64, cadence_hours: f64) -> f64 {
+        self.first_deadline_s(cadence_hours) + slot as f64 * cadence_hours * 3600.0
+    }
+    pub fn deadline_counts(&self, cadence_hours: f64, horizon_s: f64) -> (usize, bool) {
+        let intervals =
+            (horizon_s - self.window_origin_s(cadence_hours)).max(0.0) / (cadence_hours * 3600.0);
+        let due = (intervals + 1e-10).floor() as usize;
+        (due, intervals > due as f64 + 1e-10)
     }
     /// New-workload policy, separate from format validation so historical
     /// workloads and checkpoints can still be inspected and replayed verbatim.
     pub fn validate_timing(&self, cadence: f64) -> Result<(), String> {
         self.validate(cadence)?;
+        if let Some(basis) = &self.admission {
+            basis.validate()?;
+            if self.illumination == Illumination::Daylight
+                && !(self.fulfilment == Fulfilment::Mosaic
+                    && self.mosaic_timing == MosaicTiming::CloseInTime)
+                && self.solar_tolerance_hours * 2.0 + 1e-9
+                    < basis.reserved_usable_window_hours_per_day
+            {
+                return Err("Solar window is narrower than the saved admission budget; redesign the job for that window.".into());
+            }
+            if cadence + 1e-9 < basis.cadence_floor_hours {
+                return Err(format!("Delivery cadence is below the {:.2} h constellation admission floor; redesign the job against a different service policy.", basis.cadence_floor_hours));
+            }
+            if self.fulfilment == Fulfilment::Mosaic
+                && self.mosaic_span_hours.unwrap_or(cadence) + 1e-9 < basis.collection_floor_hours
+            {
+                return Err(
+                    "Mosaic collection window is shorter than its modeled strip/pass requirement."
+                        .into(),
+                );
+            }
+        }
         if self.illumination == Illumination::Daylight {
             if cadence < 24.0 {
                 return Err("Daylight jobs require a cadence of at least 24 h. Use any-time capture for subdaily jobs.".into());
@@ -118,6 +209,7 @@ impl Acquisition {
 #[serde(default)]
 pub struct AcquisitionGenerator {
     pub mosaic_fraction: f64,
+    pub similar_solar_time_fraction: f64,
     pub solar_stddev_hours: f64,
     pub solar_tolerance_hours: f64,
     pub min_solar_elevation_deg: f64,
@@ -128,8 +220,9 @@ impl Default for AcquisitionGenerator {
     fn default() -> Self {
         Self {
             mosaic_fraction: 0.5,
+            similar_solar_time_fraction: 0.5,
             solar_stddev_hours: 4.0,
-            solar_tolerance_hours: 1.0,
+            solar_tolerance_hours: 4.0,
             min_solar_elevation_deg: 0.0,
             priority_min: 1,
             priority_max: 5,
@@ -146,6 +239,8 @@ impl AcquisitionGenerator {
         .validate(24.0)?;
         if !self.mosaic_fraction.is_finite()
             || !(0.0..=1.0).contains(&self.mosaic_fraction)
+            || !self.similar_solar_time_fraction.is_finite()
+            || !(0.0..=1.0).contains(&self.similar_solar_time_fraction)
             || !self.solar_stddev_hours.is_finite()
             || !(0.0..=12.0).contains(&self.solar_stddev_hours)
             || self.priority_min > self.priority_max
@@ -183,7 +278,7 @@ impl AcquisitionGenerator {
                 break time;
             }
         };
-        Acquisition {
+        let mut acquisition = Acquisition {
             fulfilment: if rng.unit() < self.mosaic_fraction {
                 Fulfilment::Mosaic
             } else {
@@ -197,8 +292,21 @@ impl AcquisitionGenerator {
             solar_tolerance_hours: self.solar_tolerance_hours,
             min_solar_elevation_deg: self.min_solar_elevation_deg,
             phase_hours: 0.0,
+            first_deadline_hours: None,
             illumination: Illumination::for_cadence(cadence),
+            mosaic_timing: MosaicTiming::CadenceWindow,
+            mosaic_span_hours: None,
+            admission: None,
+        };
+        if acquisition.fulfilment == Fulfilment::Mosaic {
+            acquisition.mosaic_timing =
+                if cadence >= 24.0 && rng.unit() < self.similar_solar_time_fraction {
+                    MosaicTiming::SimilarSolarTime
+                } else {
+                    MosaicTiming::CloseInTime
+                };
         }
+        acquisition
     }
 }
 
@@ -572,6 +680,12 @@ impl Job {
     }
     pub fn validate(&self) -> Result<(), String> {
         self.acquisition.validate(self.cadence_hours)?;
+        if let Some(basis) = &self.acquisition.admission {
+            if basis.geometry_hash != self.aoi.geometry_hash {
+                return Err("Admission basis belongs to different AOI geometry".into());
+            }
+            self.acquisition.validate_timing(self.cadence_hours)?;
+        }
         if self.aoi.id.is_empty()
             || self.aoi.source.is_empty()
             || !positive(self.aoi.area_km2)
@@ -971,5 +1085,45 @@ mod tests {
             serde_json::from_str(&serde_json::to_string(&a).unwrap()).unwrap();
         assert_eq!(restored, a);
         assert!(restored.accepts(12.0, -90.0));
+    }
+}
+
+#[cfg(test)]
+mod collection_timing_tests {
+    use super::*;
+    #[test]
+    fn coherence_modes_separate_solar_time_from_elapsed_time_and_deadlines() {
+        let mut a = Acquisition {
+            fulfilment: Fulfilment::Mosaic,
+            mosaic_timing: MosaicTiming::SimilarSolarTime,
+            mosaic_span_hours: Some(48.0),
+            solar_time_hours: 12.0,
+            solar_tolerance_hours: 4.0,
+            ..Default::default()
+        };
+        assert!(a.accepts(8.0, 10.0) && a.accepts(16.0, 10.0));
+        assert!(!a.accepts(7.99, 10.0));
+        assert_eq!(
+            a.collection_window_s(0, 312.0),
+            (264.0 * 3600.0, 312.0 * 3600.0)
+        );
+        a.mosaic_timing = MosaicTiming::CloseInTime;
+        assert!(a.accepts(7.99, 10.0));
+        assert!(!a.accepts(12.0, -1.0));
+        a.fulfilment = Fulfilment::Independent;
+        assert_eq!(a.collection_window_s(0, 312.0), (0.0, 312.0 * 3600.0));
+        a.mosaic_span_hours = Some(313.0);
+        assert!(a.validate(312.0).is_err());
+    }
+    #[test]
+    fn absent_collection_fields_preserve_legacy_workload_semantics() {
+        let a: Acquisition =
+            serde_json::from_str(r#"{"fulfilment":"mosaic","solar_tolerance_hours":1.0}"#).unwrap();
+        assert_eq!(a.mosaic_timing, MosaicTiming::CadenceWindow);
+        assert_eq!(
+            a.collection_window_s(2, 24.0),
+            (48.0 * 3600.0, 72.0 * 3600.0)
+        );
+        assert!(!a.accepts(10.0, 20.0));
     }
 }

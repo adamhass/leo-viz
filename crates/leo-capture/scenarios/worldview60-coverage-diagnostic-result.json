@@ -1,0 +1,288 @@
+{
+  "by_cadence_and_fulfilment": {
+    "24h / independent": {
+      "candidate_coverage_bins": [
+        87,
+        7,
+        8,
+        1,
+        2,
+        6508
+      ],
+      "candidate_fraction_sum": 6518.377811196044,
+      "candidate_union_complete": 6508,
+      "candidate_union_complete_but_scheduled_miss": 5825,
+      "due_requests": 6613,
+      "incomplete_even_with_all_candidates": 105,
+      "no_candidate_crops": 87,
+      "scheduled_complete": 683,
+      "scheduled_coverage_bins": [
+        4961,
+        442,
+        329,
+        130,
+        68,
+        683
+      ],
+      "scheduled_fraction_sum": 1202.4698555453454
+    },
+    "24h / mosaic": {
+      "candidate_coverage_bins": [
+        92,
+        6,
+        7,
+        4,
+        1,
+        6541
+      ],
+      "candidate_fraction_sum": 6552.915212425093,
+      "candidate_union_complete": 6541,
+      "candidate_union_complete_but_scheduled_miss": 5852,
+      "due_requests": 6651,
+      "incomplete_even_with_all_candidates": 110,
+      "no_candidate_crops": 92,
+      "scheduled_complete": 689,
+      "scheduled_coverage_bins": [
+        4927,
+        498,
+        341,
+        137,
+        59,
+        689
+      ],
+      "scheduled_fraction_sum": 1222.3820724182156
+    },
+    "4h / independent": {
+      "candidate_coverage_bins": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        39756
+      ],
+      "candidate_fraction_sum": 39755.99881936868,
+      "candidate_union_complete": 39756,
+      "candidate_union_complete_but_scheduled_miss": 34099,
+      "due_requests": 39756,
+      "incomplete_even_with_all_candidates": 0,
+      "no_candidate_crops": 0,
+      "scheduled_complete": 5657,
+      "scheduled_coverage_bins": [
+        25418,
+        3889,
+        3149,
+        1226,
+        417,
+        5657
+      ],
+      "scheduled_fraction_sum": 10327.560935096062
+    },
+    "4h / mosaic": {
+      "candidate_coverage_bins": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        39264
+      ],
+      "candidate_fraction_sum": 39263.99882291273,
+      "candidate_union_complete": 39264,
+      "candidate_union_complete_but_scheduled_miss": 33517,
+      "due_requests": 39264,
+      "incomplete_even_with_all_candidates": 0,
+      "no_candidate_crops": 0,
+      "scheduled_complete": 5747,
+      "scheduled_coverage_bins": [
+        24754,
+        3952,
+        3112,
+        1287,
+        412,
+        5747
+      ],
+      "scheduled_fraction_sum": 10463.40687301711
+    }
+  },
+  "by_priority": {
+    "1": {
+      "candidate_coverage_bins": [
+        24,
+        5,
+        2,
+        2,
+        0,
+        18593
+      ],
+      "candidate_fraction_sum": 18597.67661043019,
+      "candidate_union_complete": 18593,
+      "candidate_union_complete_but_scheduled_miss": 16016,
+      "due_requests": 18626,
+      "incomplete_even_with_all_candidates": 33,
+      "no_candidate_crops": 24,
+      "scheduled_complete": 2577,
+      "scheduled_coverage_bins": [
+        11672,
+        1857,
+        1687,
+        609,
+        224,
+        2577
+      ],
+      "scheduled_fraction_sum": 5004.486393232133
+    },
+    "2": {
+      "candidate_coverage_bins": [
+        38,
+        1,
+        4,
+        2,
+        1,
+        18488
+      ],
+      "candidate_fraction_sum": 18493.99414743534,
+      "candidate_union_complete": 18488,
+      "candidate_union_complete_but_scheduled_miss": 16800,
+      "due_requests": 18534,
+      "incomplete_even_with_all_candidates": 46,
+      "no_candidate_crops": 38,
+      "scheduled_complete": 1688,
+      "scheduled_coverage_bins": [
+        13449,
+        1797,
+        1131,
+        361,
+        108,
+        1688
+      ],
+      "scheduled_fraction_sum": 3322.0680446100355
+    },
+    "3": {
+      "candidate_coverage_bins": [
+        40,
+        4,
+        0,
+        0,
+        0,
+        17876
+      ],
+      "candidate_fraction_sum": 17877.08038070008,
+      "candidate_union_complete": 17876,
+      "candidate_union_complete_but_scheduled_miss": 16214,
+      "due_requests": 17920,
+      "incomplete_even_with_all_candidates": 44,
+      "no_candidate_crops": 40,
+      "scheduled_complete": 1662,
+      "scheduled_coverage_bins": [
+        12956,
+        1780,
+        1076,
+        339,
+        107,
+        1662
+      ],
+      "scheduled_fraction_sum": 3221.9800792036563
+    },
+    "4": {
+      "candidate_coverage_bins": [
+        37,
+        1,
+        6,
+        1,
+        1,
+        18339
+      ],
+      "candidate_fraction_sum": 18345.80274493471,
+      "candidate_union_complete": 18339,
+      "candidate_union_complete_but_scheduled_miss": 16680,
+      "due_requests": 18385,
+      "incomplete_even_with_all_candidates": 46,
+      "no_candidate_crops": 37,
+      "scheduled_complete": 1659,
+      "scheduled_coverage_bins": [
+        13532,
+        1710,
+        1033,
+        339,
+        112,
+        1659
+      ],
+      "scheduled_fraction_sum": 3169.8350687250154
+    },
+    "5": {
+      "candidate_coverage_bins": [
+        40,
+        2,
+        3,
+        0,
+        1,
+        18773
+      ],
+      "candidate_fraction_sum": 18776.736782402353,
+      "candidate_union_complete": 18773,
+      "candidate_union_complete_but_scheduled_miss": 13583,
+      "due_requests": 18819,
+      "incomplete_even_with_all_candidates": 46,
+      "no_candidate_crops": 40,
+      "scheduled_complete": 5190,
+      "scheduled_coverage_bins": [
+        8451,
+        1637,
+        2004,
+        1132,
+        405,
+        5190
+      ],
+      "scheduled_fraction_sum": 8497.450150305875
+    }
+  },
+  "completion_relative_area_tolerance": 1e-06,
+  "coverage_bin_labels": [
+    "zero",
+    "0_to_50_percent",
+    "50_to_90_percent",
+    "90_to_99_percent",
+    "99_percent_to_completion_threshold",
+    "complete"
+  ],
+  "elapsed_s": 160.50298341,
+  "horizon_s": 86400.0,
+  "interpretation": [
+    "All eligible candidate crops are unioned, including mutually incompatible and source-unreachable choices. This is an optimistic geometric coverage bound, not a feasible schedule.",
+    "An incomplete candidate union proves that request cannot be completed with these exported candidates, within the numerical geometry model and tolerance. It does not prove physical impossibility under finer time/pointing sampling.",
+    "Complete candidate union does not establish a feasible path or constellation schedule. Remaining misses combine scheduling conflicts and heuristic limitations; this diagnostic does not separate them.",
+    "Independent-crop jobs yield incremental data; they are still counted complete here only when the entire requested area is covered within the cadence window."
+  ],
+  "preset_hash_fnv1a64": 2210360759302158354,
+  "scheduled_complete_but_candidate_union_incomplete": 0,
+  "schema_version": 1,
+  "totals": {
+    "candidate_coverage_bins": [
+      179,
+      13,
+      15,
+      5,
+      3,
+      92069
+    ],
+    "candidate_fraction_sum": 92091.29066590287,
+    "candidate_union_complete": 92069,
+    "candidate_union_complete_but_scheduled_miss": 79293,
+    "due_requests": 92284,
+    "incomplete_even_with_all_candidates": 215,
+    "no_candidate_crops": 179,
+    "scheduled_complete": 12776,
+    "scheduled_coverage_bins": [
+      60060,
+      8781,
+      6931,
+      2780,
+      956,
+      12776
+    ],
+    "scheduled_fraction_sum": 23215.81973607671
+  },
+  "schedule_artifact": "artifacts/scheduling-solutions/worldview60-24h-lagrangian-v1/schedule.json",
+  "diagnostic_artifact": "artifacts/scheduling-solutions/worldview60-24h-lagrangian-v1/coverage-diagnostic.json"
+}

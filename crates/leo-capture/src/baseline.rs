@@ -427,7 +427,8 @@ impl<'a> Baseline<'a> {
             .iter()
             .enumerate()
             .map(|(i, j)| {
-                let available = (options.duration_s - j.acquisition.phase_hours * 3600.0).max(0.0);
+                let available =
+                    (options.duration_s - j.acquisition.window_origin_s(j.cadence_hours)).max(0.0);
                 let intervals = available / (j.cadence_hours * 3600.0);
                 let due = (intervals + 1e-10).floor() as u64;
                 let pending = u64::from(intervals > due as f64 + 1e-10);
@@ -461,7 +462,7 @@ impl<'a> Baseline<'a> {
                     "Only newly useful cropped polygons are retained; all retained crops remain for the full run, without downlink, deletion or processing.".into(),
                     "A physical capture may satisfy multiple jobs only within their acquisition slot and local solar-time/daylight constraints.".into(),
                     "Any-time jobs bypass solar-time and elevation filters, permitting night capture. Daylight jobs retain both filters; timing consistency alone does not certify coverage or seasonal daylight.".into(),
-                    "Slots are [phase+n*cadence, phase+(n+1)*cadence); no pre-run history or carry-over. Incomplete final slots are censored.".into(),
+                    "Slots end at the explicit next deadline + n*cadence, or legacy phase + (n+1)*cadence. No pre-run imagery or carry-over is credited. Future deadlines are pending.".into(),
                     "Independent crops become ready incrementally; mosaics require full geometric coverage within a slot, up to the reported area tolerance.".into(),
                     "Spherical Earth, interpolated swept scanlines and densified equal-area polygons. Halve step and edge spacing for convergence.".into(),
                     "Job local time is evaluated at its anchor. Crop solar elevation and timing are checked at interval start/midpoint/end; boundary slivers may be conservatively rejected.".into(),
@@ -495,9 +496,7 @@ impl<'a> Baseline<'a> {
             let job = &self.jobs[crop.job];
             let key = (crop.job, crop.slot);
             if !self.state.active.contains_key(&key) {
-                let deadline = (job.acquisition.phase_hours
-                    + (crop.slot + 1) as f64 * job.cadence_hours)
-                    * 3600.0;
+                let deadline = job.acquisition.deadline_s(crop.slot, job.cadence_hours);
                 self.state
                     .expiry
                     .insert(((deadline * 1e9).ceil() as u64, crop.job, crop.slot));
@@ -606,7 +605,7 @@ impl<'a> Baseline<'a> {
     pub(crate) fn update_clock(&mut self, time: f64) {
         self.expire(time);
         for (job, r) in self.jobs.iter().zip(&mut self.state.report.jobs) {
-            let intervals = (time - job.acquisition.phase_hours * 3600.0).max(0.0)
+            let intervals = (time - job.acquisition.window_origin_s(job.cadence_hours)).max(0.0)
                 / (job.cadence_hours * 3600.0);
             r.due_updates = (intervals + 1e-10).floor() as u64;
             r.pending_updates = u64::from(intervals > r.due_updates as f64 + 1e-10);
@@ -697,7 +696,7 @@ impl BaselineState {
             return Err(invalid());
         }
         for (i, (j, r)) in jobs.iter().zip(&self.report.jobs).enumerate() {
-            let due = (((now - j.acquisition.phase_hours * 3600.0).max(0.0)
+            let due = (((now - j.acquisition.window_origin_s(j.cadence_hours)).max(0.0)
                 / (j.cadence_hours * 3600.0))
                 + 1e-10)
                 .floor() as u64;
@@ -722,8 +721,7 @@ impl BaselineState {
                 return Err("Cancelled while validating partial coverage".into());
             }
             let j = jobs.get(job).ok_or_else(invalid)?;
-            let deadline =
-                (j.acquisition.phase_hours + (slot + 1) as f64 * j.cadence_hours) * 3600.0;
+            let deadline = j.acquisition.deadline_s(slot, j.cadence_hours);
             if deadline <= now
                 || !r.area.is_finite()
                 || r.area < 0.0
@@ -867,7 +865,7 @@ pub(crate) fn segment(
             geometric += 1;
             let job = &jobs[piece.job];
             let cadence = job.cadence_hours * 3600.0;
-            let phase = job.acquisition.phase_hours * 3600.0;
+            let phase = job.acquisition.window_origin_s(job.cadence_hours);
             let mut left = start.max(phase);
             let mut accepted = false;
             while left < end - 1e-9 {
@@ -875,6 +873,13 @@ pub(crate) fn segment(
                 let right = end.min(phase + (slot + 1) as f64 * cadence);
                 if right <= left {
                     break;
+                }
+                let (collection_start, _) =
+                    job.acquisition.collection_window_s(slot, job.cadence_hours);
+                left = left.max(collection_start);
+                if left >= right - 1e-9 {
+                    left = right;
+                    continue;
                 }
                 let shape = if left == start && right == end {
                     intersect.clone()

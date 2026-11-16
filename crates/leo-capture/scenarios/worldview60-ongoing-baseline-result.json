@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "purpose": "Default visualizer replay of the previously verified 58.57% independent-path candidate",
+  "selected_candidate": "independent_paths_baseline",
+  "graph_directory": "artifacts/scheduling-graphs/worldview60-ongoing-24h-20261113",
+  "schedule": "artifacts/scheduling-solutions/worldview60-ongoing-baseline-24h-20261113/schedule.json",
+  "report": "artifacts/scheduling-solutions/worldview60-ongoing-baseline-24h-20261113/report.json",
+  "playback": "artifacts/scheduling-solutions/worldview60-ongoing-baseline-24h-20261113/playback.json.gz",
+  "horizon_s": 86400.0,
+  "due_deadlines": 2334,
+  "planned_met_deadlines": 1367,
+  "planned_met_rate_percent": 58.56898029134533,
+  "planned_missed_deadlines": 967,
+  "capture_segments": 22462,
+  "matches_original_candidate_verification": true,
+  "original_priority_plan_preserved": true,
+  "bundled_playback": "assets/schedules/worldview60-ongoing-baseline-24h.json.gz"
+}

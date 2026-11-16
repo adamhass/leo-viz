@@ -542,8 +542,29 @@ preserve a running capture session. Steady workload totals remain estimates,
 separate from measured capture fulfilment.
 
 The renderer-independent [`leo-capture`](crates/leo-capture/README.md) crate also
-provides a headless CLI and optional streaming JSONL acquisition opportunities for
-the later scheduler. No execution engine or constrained scheduler is introduced.
+provides headless acquisition graphs, job-design tools and an experimental path
+scheduler. See [job design](crates/leo-capture/JOB-DESIGN.md) and the
+[solver experiments](crates/leo-capture/SCHEDULING-SOLVER.md) for the workload
+contract, measured results and model limitations.
+
+## Scheduled observation replay
+
+In the desktop app, open **Earth Observation → Schedule playback → Load schedule**.
+The bundled WorldView-60 baseline contains 53,000 AOIs/jobs and 22,462 one-second
+capture segments over 24 hours. It meets **1,367 of 2,334 due deadlines (58.57%)**;
+967 are missed and 50,666 jobs have no deadline in that day.
+
+Loading reports progress while AOI geometry and satellite trails are prepared on
+CPU workers. Use **Play schedule**, **Next capture**, or the time slider to explore
+the plan. Selected AOIs are teal, inactive AOIs gray, and AOIs with a missed due
+deadline red, including partial coverage. Red shows the final planning result;
+jobs remain ongoing. Unused opportunities and future deadlines are not failures.
+
+Observation reach and the sensor fan start enabled. The fan is gray while idle,
+amber during a maneuver/settling, and green while capturing. Green sweep trails
+persist for 15 simulated minutes. Replay uses the saved pointing modes and timing;
+it does not generate captured imagery. See the [replay guide](docs/schedule-playback.md)
+for custom bundles, reproducing the baseline, and the code layout.
 
 ## WorldView orbit presets
 

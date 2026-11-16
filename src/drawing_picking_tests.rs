@@ -128,6 +128,7 @@ fn frame(
             draw_3d_view(
                 ui,
                 Draw3dInput {
+                    schedule: None,
                     search_highlight: None,
                     selected_aoi: None,
                     observation_sampler: sampler,

@@ -11,6 +11,7 @@ fn reach_coverage_does_not_depend_on_data_storage_phase_or_fulfilment() {
     inputs.capture.channels = 0; // Irrelevant even as an invalid sensor profile.
     for job in &mut inputs.jobs {
         job.acquisition.phase_hours = 0.005;
+        job.acquisition.mosaic_span_hours = Some(job.cadence_hours / 10.0);
     }
     let result = evaluate(&inputs, |_| Ok(())).unwrap();
     assert!(result.counts.all_satisfied());

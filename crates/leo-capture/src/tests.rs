@@ -73,6 +73,39 @@ fn event(
 }
 
 #[test]
+fn ongoing_first_cycle_accepts_new_coverage_without_counting_prior_misses() {
+    let (mut jobs, regions) = fixture(vec![vec![ring(0.1, 0.1, 0.1)]], 1);
+    jobs[0].acquisition.first_deadline_hours = Some(5.0 / 3600.0);
+    jobs[0].acquisition.fulfilment = Fulfilment::Mosaic;
+    let atlas = atlas(&jobs, &regions);
+    let full = atlas.patches[0].pieces[0].shape.clone();
+    let options = Options {
+        duration_s: 20.0,
+        ..Default::default()
+    };
+    let mut baseline = Baseline::new(
+        &jobs,
+        &atlas,
+        1,
+        0.0,
+        20.0,
+        CaptureProfile::default(),
+        &options,
+    )
+    .unwrap();
+    baseline
+        .accept(&event(0, 0.0, 0, vec![(0, full.clone())]))
+        .unwrap();
+    baseline.accept(&event(0, 6.0, 1, vec![(0, full)])).unwrap();
+    let report = baseline.finish(OpportunityStats::default());
+    assert_eq!(report.jobs[0].due_updates, 1);
+    assert_eq!(report.jobs[0].complete_due_updates, 1);
+    assert_eq!(report.jobs[0].missed_due_updates, 0);
+    assert_eq!(report.jobs[0].pending_updates, 1);
+    assert_eq!(report.jobs[0].complete_pending_updates, 1);
+}
+
+#[test]
 fn mosaics_accumulate_unique_area_and_independent_crops_are_ready_immediately() {
     let (mut jobs, regions) = fixture(vec![vec![ring(0.1, 0.1, 0.1)]], 2);
     jobs[0].acquisition.fulfilment = Fulfilment::Mosaic;
@@ -267,7 +300,8 @@ fn generator_sweeps_between_samples_gates_daylight_and_job_time_and_converges() 
 #[test]
 fn deterministic_normal_assignment_priorities_and_circular_time() {
     let (jobs, _) = fixture(vec![vec![ring(0.1, 0.1, 0.1)]], 20000);
-    let g = Generator::default();
+    let mut g = Generator::default();
+    g.acquisition.solar_tolerance_hours = 1.0;
     let generated = g.generate(jobs.into_iter().map(|j| j.aoi)).unwrap();
     let times: Vec<_> = generated
         .iter()
@@ -526,7 +560,7 @@ fn checkpoint_versions_preserve_explicit_and_legacy_illumination() {
         .read_to_end(&mut bytes)
         .unwrap();
     let mut json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
-    assert_eq!(json["schema_version"], 2);
+    assert_eq!(json["schema_version"], 4);
     json["schema_version"] = 1.into();
     for j in json["inputs"]["jobs"].as_array_mut().unwrap() {
         j["acquisition"]

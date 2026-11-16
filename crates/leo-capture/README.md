@@ -1,12 +1,16 @@
 # Acquisition opportunities and unconstrained capture
 
-Application-level workload/capture library above `leo-sim`. No renderer, GPU,
-processing kernels, execution actions, admission controller or rolling-horizon
-scheduler. The GUI and CLI share this implementation and job/persistence models.
+Application-level workload/capture library above `leo-sim`. The GUI and CLI share
+job models, persistence, polygon coverage and deadline semantics. There is no
+renderer, GPU, processing execution engine or rolling-horizon scheduler here.
 
-The separate [acquisition-graph experiment](SCHEDULING.md) builds timed imaging
-and maneuver choices from a saved AOI/jobs preset and WorldView-60. It preserves
-optional acquisitions and mosaic crop geometry; path optimization comes later.
+The [acquisition-graph experiment](SCHEDULING.md) builds timed imaging and precise
+maneuver choices from a saved AOI/jobs preset and WorldView-60. The
+[experimental solver](SCHEDULING-SOLVER.md) selects satellite paths and verifies
+deadline coverage. [Job design](JOB-DESIGN.md) documents the constellation-based
+reservation policy, mosaic timing and randomized ongoing deadlines.
+[Portable replay](../../docs/schedule-playback.md) packages selected actions,
+AOIs/jobs and assessed deadlines for the native visualizer.
 
 ```sh
 cargo test --manifest-path crates/leo-capture/Cargo.toml
@@ -54,10 +58,12 @@ Times in events and reports are seconds from `epoch_unix_s + start_s`.
   Map/Window pipeline. Mosaics accumulate the union of captured polygons, never
   the sum of strip areas. Independent crops become ready immediately; mosaics
   become ready only after complete coverage (default numerical tolerance 1 ppm).
-- Acquisition slots are `[phase + n×cadence, phase + (n+1)×cadence)`, starting at
-  n=0. No prehistory is seeded. Slot boundaries split strips spatially; captures
-  cannot be reused as fresh observations in another slot. The unfinished final
-  slot is censored, not reported as a missed deadline.
+- Acquisition deadlines are `first_deadline + n×cadence`, starting at n=0.
+  Legacy workloads use `phase + cadence` for the first deadline. Collection
+  windows end at the deadline and span the cadence or the job's shorter mosaic
+  span. No imagery prehistory is seeded. Boundaries split strips spatially;
+  captures cannot be reused as fresh observations in another slot. A deadline
+  beyond the reporting horizon is not reported as missed.
 - All pieces of a mosaic must come from its slot. Thus the initial maximum mosaic
   collection span equals the cadence. There is no separate tighter coherence bound.
 - Generated cadences below 24 h use `illumination: "any_time"`, bypassing both

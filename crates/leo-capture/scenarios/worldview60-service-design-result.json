@@ -1,0 +1,136 @@
+{
+  "job_design_report": {
+    "by_cadence": {
+      "104 days": 82,
+      "117 days": 51,
+      "13 days": 28303,
+      "130 days": 43,
+      "143 days": 29,
+      "156 days": 18,
+      "169 days": 11,
+      "182 days": 20,
+      "195 days": 14,
+      "208 days": 4,
+      "221 days": 4,
+      "234 days": 5,
+      "247 days": 1,
+      "26 days": 7327,
+      "260 days": 1,
+      "273 days": 1,
+      "30 days": 12097,
+      "39 days": 3836,
+      "52 days": 624,
+      "65 days": 238,
+      "78 days": 182,
+      "91 days": 109
+    },
+    "by_strip_count": {
+      "1": 37945,
+      "10": 43,
+      "11": 29,
+      "12": 18,
+      "13": 11,
+      "14": 20,
+      "15": 14,
+      "16": 4,
+      "17": 4,
+      "18": 5,
+      "19": 1,
+      "2": 9782,
+      "20": 1,
+      "21": 1,
+      "3": 3836,
+      "4": 624,
+      "5": 238,
+      "6": 182,
+      "7": 109,
+      "8": 82,
+      "9": 51
+    },
+    "by_timing_mode": {
+      "Close in elapsed time": 13261,
+      "Independent crops": 26477,
+      "Similar local solar time": 13262
+    },
+    "interpretation": [
+      "Provisional service design under a parallel-strip reservation policy, not a proven feasible schedule or a physical lower bound for arbitrary agile trajectories.",
+      "Perpendicular widths use locally projected AOI polygons and ascending/descending directions from the WorldView-60 design orbit. Disconnected projection gaps do not consume strips. One consistent direction and one strip per pass are assumed for each mosaic.",
+      "Reserved lanes are an admission assumption derived from access width / strip spacing, not a measured clique of competing jobs. Daily opportunities use the configured nominal access interval and usable window; actual illumination, seasons and conflicts need scheduling verification.",
+      "Delivery periods round up to whole days. Similar-solar-time mosaics may collect over the delivery period. Close-in-time mosaics use ceil(strips / daily pass budget) whole days immediately before the delivery deadline. Independent crops have no coherence constraint.",
+      "Priorities, AOIs, pipelines, fulfilment and output densities are preserved. History samples are adjusted to retain at least the original history duration, with at least two samples for window jobs. Delivery phases are deterministically staggered across each cycle by default to avoid synchronizing short collection windows. No original assets are overwritten."
+    ],
+    "jobs": 53000,
+    "jobs_with_changed_cadence": 40903,
+    "jobs_with_staggered_phase": 50081,
+    "maximum_cadence_days": 273.0,
+    "minimum_cadence_days": 13.0,
+    "policy": {
+      "access_width_km": 450.0,
+      "epoch_unix_s": 1794528000.0,
+      "imaging_width_km": 13.1,
+      "nominal_access_gap_hours": 2.4,
+      "reserved_lanes": null,
+      "similar_solar_time_fraction": 0.5,
+      "stagger_delivery_phases": true,
+      "strip_overlap_fraction": 0.1,
+      "usable_window_hours_per_day": 8.0
+    },
+    "schema_version": 1,
+    "source_preset_hash_fnv1a64": 2210360759302158354,
+    "status": "complete"
+  },
+  "graph_smoke": {
+    "horizon_s": 600,
+    "satellites": 60,
+    "actions": 1656,
+    "nodes": 3432,
+    "edges": 96809,
+    "elapsed_s": 18.053899943,
+    "compressed_bytes": 1274635,
+    "validation": {
+      "status": "passed",
+      "satellites": 60,
+      "capture_actions": 1656,
+      "crop_intervals_checked": 1824,
+      "direct_maneuver_edges_checked": 91566,
+      "smallest_maneuver_s": 2.5424221624913517,
+      "largest_maneuver_s": 23.32886627455118,
+      "short_transition_examples": [
+        {
+          "satellite": 1,
+          "from": 16,
+          "to": 28,
+          "physical_slew_s": 2.568893269363395,
+          "gap_between_captures_s": 3.0
+        },
+        {
+          "satellite": 1,
+          "from": 17,
+          "to": 27,
+          "physical_slew_s": 2.568893269363395,
+          "gap_between_captures_s": 3.0
+        },
+        {
+          "satellite": 1,
+          "from": 17,
+          "to": 29,
+          "physical_slew_s": 2.5627038672162827,
+          "gap_between_captures_s": 3.0
+        }
+      ]
+    }
+  },
+  "validation": {
+    "capture_unit_tests_passed": 66,
+    "capture_unit_tests_failed": 0,
+    "existing_scale_benchmarks_ignored": 3,
+    "application_cargo_check": "passed (one pre-existing dead-code warning)",
+    "all_53000_job_invariants": "passed",
+    "new_graph_export_solve_roundtrip": "passed in integration test"
+  },
+  "artifacts": {
+    "preset": "artifacts/job-design/worldview60-20261113/preset.json.gz",
+    "job_report": "artifacts/job-design/worldview60-20261113/report.json",
+    "graph": "artifacts/scheduling-graphs/worldview60-precise-10m-20261113"
+  }
+}

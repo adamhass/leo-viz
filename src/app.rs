@@ -1520,12 +1520,14 @@ impl eframe::App for App {
                 let log_max = max_zoom.ln();
                 tab.settings.zoom = (log_max + (log_min - log_max) * t_smooth).exp();
             }
-            let sim_seconds = if tab.settings.animate {
-                tab.settings.time += dt * tab.settings.speed;
-                dt * tab.settings.speed
+            // Replay is a pure time lookup, so it can use wall-clock steps even
+            // when rendering is slow; recent trails retain skipped one-second sweeps.
+            let clock_dt = if tab.observation_replay.is_some() {
+                real_dt
             } else {
-                0.0
+                dt
             };
+            let sim_seconds = crate::schedule_playback::advance(tab, clock_dt);
             if sim_seconds.abs() < 1e-9 {
                 continue;
             }
@@ -1639,7 +1641,10 @@ impl eframe::App for App {
             .get(active_tab_idx)
             .map(|t| t.settings.time)
             .unwrap_or(0.0);
-        let sim_time = v.start_timestamp + Duration::milliseconds((tab_time * 1000.0) as i64);
+        let epoch = v.tabs.get(active_tab_idx).map_or(v.start_timestamp, |tab| {
+            crate::schedule_playback::epoch(tab, v.start_timestamp)
+        });
+        let sim_time = epoch + Duration::milliseconds((tab_time * 1000.0) as i64);
         let gmst = greenwich_mean_sidereal_time(sim_time);
         v.current_gmst = gmst;
 

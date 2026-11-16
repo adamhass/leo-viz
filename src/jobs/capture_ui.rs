@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use eframe::egui;
 use leo_capture::{
     baseline::Options,
-    workload::{Acquisition, AcquisitionGenerator, Fulfilment, Illumination, Job},
+    workload::{Acquisition, AcquisitionGenerator, Fulfilment, Illumination, Job, MosaicTiming},
 };
 use leo_sim::acquisition::CaptureProfile;
 use std::sync::{atomic::Ordering, Arc};
@@ -12,6 +12,10 @@ pub(super) fn generator_controls(ui: &mut egui::Ui, g: &mut AcquisitionGenerator
     ui.collapsing("Acquisition requirements",|ui| {
         ui.horizontal_wrapped(|ui| {
             ui.label("Complete mosaic fraction");ui.add(egui::DragValue::new(&mut g.mosaic_fraction).range(0.0..=1.0).speed(0.01));
+        });
+        ui.horizontal_wrapped(|ui| {
+            ui.label("Similar solar-time fraction of mosaics");
+            ui.add(egui::DragValue::new(&mut g.similar_solar_time_fraction).range(0.0..=1.0).speed(0.01));
         });
         ui.horizontal_wrapped(|ui| {
             ui.label("Priority range (higher wins)");
@@ -47,25 +51,118 @@ fn solar_controls(ui: &mut egui::Ui, tolerance: &mut f64, elevation: &mut f64) {
     });
 }
 pub(super) fn job_controls(ui: &mut egui::Ui, a: &mut Acquisition, cadence: f64) {
-    ui.collapsing("Acquisition and priority",|ui| {
-        egui::ComboBox::from_id_salt("job-fulfilment").selected_text(a.fulfilment.label()).show_ui(ui,|ui| {
-            for value in [Fulfilment::Independent,Fulfilment::Mosaic] {ui.selectable_value(&mut a.fulfilment,value,value.label());}
-        });
-        ui.horizontal_wrapped(|ui| {ui.label("Priority (higher wins)");ui.add(egui::DragValue::new(&mut a.priority));});
-        ui.horizontal_wrapped(|ui| {ui.label("First slot starts after");ui.add(egui::DragValue::new(&mut a.phase_hours).range(0.0..=(cadence-1e-6).max(0.0)).suffix(" h"));});
-        egui::ComboBox::from_id_salt("job-illumination").selected_text(a.illumination.label()).show_ui(ui, |ui| {
-            ui.selectable_value(&mut a.illumination, Illumination::AnyTime, Illumination::AnyTime.label());
-            ui.add_enabled_ui(cadence >= 24.0, |ui| {
-                ui.selectable_value(&mut a.illumination, Illumination::Daylight, Illumination::Daylight.label());
+    ui.collapsing("Acquisition and priority", |ui| {
+        egui::ComboBox::from_id_salt("job-fulfilment")
+            .selected_text(a.fulfilment.label())
+            .show_ui(ui, |ui| {
+                for value in [Fulfilment::Independent, Fulfilment::Mosaic] {
+                    ui.selectable_value(&mut a.fulfilment, value, value.label());
+                }
             });
+        if a.fulfilment == Fulfilment::Mosaic {
+            mosaic_controls(ui, a, cadence);
+        }
+        if let Some(basis) = &a.admission {
+            ui.small(format!(
+                "Constellation admission estimate: {} strips, {} reserved lanes, {} usable passes/day; minimum cadence {:.1} days.",
+                basis.planned_strips_with_overlap, basis.reserved_lanes,
+                basis.nominal_passes_per_day, basis.cadence_floor_hours / 24.0
+            ));
+            ui.small("A strip-capacity policy estimate; joint scheduling and weather remain to be verified.");
+        }
+        ui.horizontal_wrapped(|ui| {
+            ui.label("Priority (higher wins)");
+            ui.add(egui::DragValue::new(&mut a.priority));
         });
-        if cadence < 24.0 { ui.small("Subdaily jobs must allow capture at any time of day."); }
+        deadline_controls(ui, a, cadence);
+        egui::ComboBox::from_id_salt("job-illumination")
+            .selected_text(a.illumination.label())
+            .show_ui(ui, |ui| {
+                ui.selectable_value(&mut a.illumination, Illumination::AnyTime, Illumination::AnyTime.label());
+                ui.add_enabled_ui(cadence >= 24.0, |ui| {
+                    ui.selectable_value(&mut a.illumination, Illumination::Daylight, Illumination::Daylight.label());
+                });
+            });
+        if cadence < 24.0 {
+            ui.small("Subdaily jobs must allow capture at any time of day.");
+        }
         ui.add_enabled_ui(a.illumination == Illumination::Daylight, |ui| {
-            ui.horizontal_wrapped(|ui| {ui.label("Preferred local solar time");ui.add(egui::DragValue::new(&mut a.solar_time_hours).range(0.0..=23.999).speed(0.25).suffix(" h"));});
-            solar_controls(ui,&mut a.solar_tolerance_hours,&mut a.min_solar_elevation_deg);
+            if a.fulfilment == Fulfilment::Mosaic && a.mosaic_timing == MosaicTiming::CloseInTime {
+                ui.horizontal(|ui| {
+                    ui.label("Minimum solar elevation");
+                    ui.add(egui::DragValue::new(&mut a.min_solar_elevation_deg).range(0.0..=89.999).suffix("°"));
+                });
+            } else {
+                ui.horizontal_wrapped(|ui| {
+                    ui.label("Preferred local solar time");
+                    ui.add(egui::DragValue::new(&mut a.solar_time_hours).range(0.0..=23.999).speed(0.25).suffix(" h"));
+                });
+                solar_controls(ui, &mut a.solar_tolerance_hours, &mut a.min_solar_elevation_deg);
+            }
         });
-        ui.small("Cumulative captures within each cadence slot. Overlapping jobs can use the same physical capture if both accept its time. Overload policy: drop lowest-priority whole jobs first.");
+        ui.small("Cumulative captures within each cadence slot. Overlapping jobs can use the same physical capture if both accept its time. Missing an acquisition deadline does not deactivate the job.");
     });
+}
+
+fn mosaic_controls(ui: &mut egui::Ui, a: &mut Acquisition, cadence: f64) {
+    egui::ComboBox::from_id_salt("mosaic-timing")
+        .selected_text(a.mosaic_timing.label())
+        .show_ui(ui, |ui| {
+            for value in [
+                MosaicTiming::CadenceWindow,
+                MosaicTiming::SimilarSolarTime,
+                MosaicTiming::CloseInTime,
+            ] {
+                ui.selectable_value(&mut a.mosaic_timing, value, value.label());
+            }
+        });
+    let mut limited = a.mosaic_span_hours.is_some();
+    if ui
+        .checkbox(&mut limited, "Limit mosaic collection span")
+        .changed()
+    {
+        a.mosaic_span_hours = limited.then_some(cadence);
+    }
+    if let Some(span) = &mut a.mosaic_span_hours {
+        ui.horizontal(|ui| {
+            ui.label("Collection span before delivery");
+            ui.add(
+                egui::DragValue::new(span)
+                    .range(0.001..=cadence)
+                    .suffix(" h"),
+            );
+        });
+    }
+    ui.small("Similar solar time repeats the allowed solar window across days. Close in elapsed time permits any daylight within the collection span. The span ends at each delivery deadline.");
+}
+
+fn deadline_controls(ui: &mut egui::Ui, a: &mut Acquisition, cadence: f64) {
+    let mut ongoing = a.first_deadline_hours.is_some();
+    if ui
+        .checkbox(&mut ongoing, "Already-running job: explicit next deadline")
+        .changed()
+    {
+        a.first_deadline_hours = ongoing.then_some(cadence);
+    }
+    if let Some(deadline) = &mut a.first_deadline_hours {
+        ui.horizontal_wrapped(|ui| {
+            ui.label("Next deadline after planning start");
+            ui.add(
+                egui::DragValue::new(deadline)
+                    .range(0.001..=cadence)
+                    .suffix(" h"),
+            );
+        });
+    } else {
+        ui.horizontal_wrapped(|ui| {
+            ui.label("First slot starts after");
+            ui.add(
+                egui::DragValue::new(&mut a.phase_hours)
+                    .range(0.0..=(cadence - 1e-6).max(0.0))
+                    .suffix(" h"),
+            );
+        });
+    }
 }
 
 use super::capture_worker::{Command, Event, Initial, View, Worker};
@@ -300,7 +397,7 @@ impl Panel {
                 ui.horizontal_wrapped(|ui| {ui.label("Track step");ui.add(egui::DragValue::new(&mut self.options.step_s).range(0.05..=30.0).speed(0.5).suffix(" s"));});
                 ui.horizontal_wrapped(|ui| {ui.label("Polygon edge spacing");ui.add(egui::DragValue::new(&mut self.options.edge_km).range(0.05..=10.0).speed(0.1).suffix(" km"));});
                 ui.small("Halve step and edge spacing to check convergence. Mosaic tolerance: 1 part per million of geometric area.");
-                let no_deadline = jobs.iter().filter(|j| (j.acquisition.phase_hours+j.cadence_hours)*3600.0 > self.options.duration_s).count();
+                let no_deadline = jobs.iter().filter(|j| j.acquisition.first_deadline_s(j.cadence_hours) > self.options.duration_s).count();
                 if no_deadline > 0 {
                     ui.colored_label(egui::Color32::YELLOW, format!("{no_deadline} jobs have no deadline within this horizon. Their cadence feasibility will remain untested. Weekly jobs need at least 7 days; monthly jobs use a fixed 30-day cadence."));
                 }

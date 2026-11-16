@@ -14,7 +14,7 @@ pub struct Document {
 }
 impl Document {
     pub fn validate(&self) -> Result<(), String> {
-        if !(1..=3).contains(&self.schema_version)
+        if !(1..=5).contains(&self.schema_version)
             || self.jobs.is_empty()
             || self.jobs.len() > 200_000
         {
@@ -54,7 +54,7 @@ impl Document {
         serde_json::to_writer(
             &mut encoder,
             &Saved {
-                schema_version: 3,
+                schema_version: 5,
                 generator: &self.generator,
                 capture: self.capture,
                 jobs: &self.jobs,
@@ -85,11 +85,9 @@ impl Document {
             // add the new defaults without changing existing byte/pipeline draws.
             self.generator.validate()?;
             for job in &mut self.jobs {
-                job.acquisition = self
-                    .generator
-                    .acquisition_for(&job.aoi, job.cadence_hours);
+                job.acquisition = self.generator.acquisition_for(&job.aoi, job.cadence_hours);
             }
-            self.schema_version = 3;
+            self.schema_version = 5;
         }
         self.validate()?;
         Ok(self)
@@ -143,7 +141,7 @@ mod tests {
         let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
         serde_json::to_writer(&mut encoder, &json).unwrap();
         let mut migrated = Document::decode(&encoder.finish().unwrap()).unwrap();
-        assert_eq!(migrated.schema_version, 3);
+        assert_eq!(migrated.schema_version, 5);
         assert_eq!(migrated.jobs[0], original);
         migrated.jobs[0].acquisition.priority = 999;
         migrated.jobs[0].acquisition.solar_time_hours = 10.25;
@@ -173,7 +171,7 @@ mod tests {
         let bytes = document.encode().unwrap();
         assert_eq!(&bytes[..2], &[0x1f, 0x8b]);
         let decoded = Document::decode(&bytes).unwrap();
-        assert_eq!(decoded.schema_version, 3);
+        assert_eq!(decoded.schema_version, 5);
         assert_eq!(decoded.jobs, document.jobs);
         assert_eq!(decoded.generator, document.generator);
         assert_eq!(decoded.capture, document.capture);
@@ -227,8 +225,9 @@ mod tests {
             .generator
             .regenerate_timing(&mut document.jobs)
             .unwrap();
+        document.jobs[0].acquisition.first_deadline_hours = Some(0.75);
         let restored = Document::decode(&document.encode().unwrap()).unwrap();
-        assert_eq!(restored.schema_version, 3);
+        assert_eq!(restored.schema_version, 5);
         assert_eq!(restored.jobs, document.jobs);
         assert_eq!(
             restored.jobs[0].acquisition.illumination,

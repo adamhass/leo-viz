@@ -316,6 +316,10 @@ pub fn evaluate(
     for job in &mut jobs {
         job.validate()?;
         job.acquisition.phase_hours = 0.0;
+        job.acquisition.first_deadline_hours = None;
+        // Access assessment ignores delivery/collection windows, while keeping
+        // the selected mode's actual solar/elevation acceptance rules.
+        job.acquisition.mosaic_span_hours = None;
     }
     let mut stopped = None;
     let mut update = |stage, fraction| match progress(Progress { stage, fraction }) {

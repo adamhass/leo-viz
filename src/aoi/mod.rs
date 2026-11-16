@@ -12,7 +12,7 @@ mod presets;
 pub(crate) mod preview;
 mod spatial;
 #[cfg(not(target_arch = "wasm32"))]
-mod storage;
+pub(crate) mod storage;
 mod worker;
 
 use eframe::egui;

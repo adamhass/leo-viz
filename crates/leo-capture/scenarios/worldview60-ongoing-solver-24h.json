@@ -1,0 +1,9 @@
+{
+  "graph_directory": "../../../artifacts/scheduling-graphs/worldview60-ongoing-24h-20261113",
+  "output": "../../../artifacts/scheduling-solutions/worldview60-ongoing-24h-20261113",
+  "horizon_s": 86400,
+  "iterations_per_priority": 6,
+  "samples_per_axis": 3,
+  "repair_sweeps": 1,
+  "workers": 4
+}

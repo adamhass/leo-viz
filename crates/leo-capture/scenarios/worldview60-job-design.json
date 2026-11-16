@@ -1,0 +1,9 @@
+{
+  "preset": "../../../assets/presets/default-preset.json.gz",
+  "output": "../../../artifacts/job-design/worldview60-20261113",
+  "policy": {
+    "nominal_access_gap_hours": 2.4,
+    "usable_window_hours_per_day": 8,
+    "similar_solar_time_fraction": 0.5
+  }
+}
