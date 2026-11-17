@@ -4,6 +4,8 @@
 //! model. No centroid coverage, storage, processing or bandwidth constraints.
 mod export;
 mod graph;
+mod intervals;
+pub mod strips;
 pub mod playback;
 pub mod solver;
 

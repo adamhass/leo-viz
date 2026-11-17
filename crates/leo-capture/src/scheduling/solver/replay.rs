@@ -8,6 +8,46 @@ use crate::scheduling::{
 use geo::BooleanOps;
 use std::{collections::BTreeMap, io::BufRead, path::Path};
 
+#[derive(Default)]
+struct Completion {
+    coverage: verify::Request,
+    completed_at_s: Option<f64>,
+}
+
+/// A satellite's file order is not acquisition order for the constellation.
+/// Union completed crop events globally in time order, retaining the first
+/// completion per observation rather than the last (possibly redundant) crop.
+fn accumulate(
+    states: &mut [Vec<Completion>],
+    mut crops: Vec<input::Crop>,
+    originals: &BTreeMap<(usize, usize), &crate::geometry::Shape>,
+    areas: &[f64],
+) -> Result<(), String> {
+    crops.sort_by(|a, b| a.end_s.total_cmp(&b.end_s));
+    for crop in crops {
+        let state = states
+            .get_mut(crop.job)
+            .and_then(|slots| slots.get_mut(crop.slot as usize))
+            .ok_or("Unknown replay observation")?;
+        if state.coverage.complete {
+            continue;
+        }
+        let original = originals
+            .get(&(crop.job, crop.patch))
+            .ok_or("Unknown crop chart")?;
+        let shape = input::shape(crop.polygons_xy_km);
+        let clipped = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            shape.intersection(*original)
+        }))
+        .map_err(|_| "Replay crop clipping failed")?;
+        state.coverage.add(crop.patch, &clipped, areas[crop.job])?;
+        if state.coverage.complete {
+            state.completed_at_s = Some(crop.end_s);
+        }
+    }
+    Ok(())
+}
+
 pub(in crate::scheduling) fn assess_selected(
     summary: &Summary,
     report: &serde_json::Value,
@@ -59,7 +99,7 @@ pub(in crate::scheduling) fn assess_selected(
                 .map(move |piece| ((piece.job, p), &piece.shape))
         })
         .collect();
-    let mut states: Vec<Vec<verify::Request>> = jobs
+    let mut states: Vec<Vec<Completion>> = jobs
         .iter()
         .zip(included)
         .map(|(j, included)| {
@@ -70,7 +110,7 @@ pub(in crate::scheduling) fn assess_selected(
             } else {
                 0
             })
-                .map(|_| verify::Request::default())
+                .map(|_| Completion::default())
                 .collect()
         })
         .collect();
@@ -115,6 +155,7 @@ pub(in crate::scheduling) fn assess_selected(
         },
         |done, total| eprintln!("Replay capture archives: {done}/{total}"),
     )?;
+    let mut crops = Vec::new();
     for (sat, records) in satellites.iter_mut().zip(records) {
         let mut by_id: BTreeMap<_, _> = records.into_iter().map(|r| (r.id, r)).collect();
         for capture in &mut sat.captures {
@@ -131,24 +172,13 @@ pub(in crate::scheduling) fn assess_selected(
                     start_s: c.start_s,
                     end_s: c.end_s,
                 });
-                let Some(state) = states[c.job].get_mut(c.slot as usize) else {
-                    continue;
-                };
-                if state.complete {
-                    continue;
+                if states[c.job].get(c.slot as usize).is_some() {
+                    crops.push(c);
                 }
-                let original = originals
-                    .get(&(c.job, c.patch))
-                    .ok_or("Unknown crop chart")?;
-                let shape = input::shape(c.polygons_xy_km);
-                let clipped = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    shape.intersection(*original)
-                }))
-                .map_err(|_| "Replay crop clipping failed")?;
-                state.add(c.patch, &clipped, atlas.job_areas_km2[c.job])?;
             }
         }
     }
+    accumulate(&mut states, crops, &originals, &atlas.job_areas_km2)?;
     let requests: Vec<_> = states
         .iter()
         .enumerate()
@@ -162,8 +192,9 @@ pub(in crate::scheduling) fn assess_selected(
                     deadline_s: jobs[job]
                         .acquisition
                         .deadline_s(slot as u64, jobs[job].cadence_hours),
-                    coverage_fraction: (r.area / areas[job]).clamp(0.0, 1.0),
-                    complete: r.complete,
+                    coverage_fraction: (r.coverage.area / areas[job]).clamp(0.0, 1.0),
+                    complete: r.coverage.complete,
+                    completed_at_s: r.completed_at_s,
                 }
             })
         })
@@ -189,4 +220,70 @@ pub(in crate::scheduling) fn assess_selected(
         job_cadence_hours: config.job_cadence_hours,
         requests,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn rectangle(west: f64, east: f64) -> crate::geometry::Polygons {
+        vec![vec![vec![
+            [west, 0.0],
+            [east, 0.0],
+            [east, 1.0],
+            [west, 1.0],
+            [west, 0.0],
+        ]]]
+    }
+    fn crop(job: usize, slot: u64, patch: usize, end: f64, west: f64, east: f64) -> input::Crop {
+        input::Crop {
+            job,
+            slot,
+            patch,
+            start_s: end - 1.0,
+            end_s: end,
+            polygons_xy_km: rectangle(west, east),
+        }
+    }
+
+    #[test]
+    fn completion_uses_chronological_unique_coverage_across_patches_and_cycles() {
+        let full = input::shape(rectangle(0.0, 2.0));
+        let unit = input::shape(rectangle(0.0, 1.0));
+        let originals = BTreeMap::from([
+            ((0, 0), &full),
+            ((1, 0), &full),
+            ((2, 0), &unit),
+            ((2, 1), &unit),
+        ]);
+        for reverse in [false, true] {
+            let mut states = vec![
+                vec![Completion::default(), Completion::default()],
+                vec![Completion::default()],
+                vec![Completion::default()],
+            ];
+            // Different satellite/archive orders must produce the same times.
+            let mut crops = vec![
+                crop(0, 0, 0, 30.0, 0.0, 2.0),  // redundant full pass, after completion
+                crop(0, 0, 0, 20.0, 1.0, 2.0),  // complementary half completes job 0
+                crop(1, 0, 0, 25.0, 0.0, 1.0),  // duplicate half never completes job 1
+                crop(2, 0, 1, 12.0, 0.0, 1.0),  // distinct chart completes job 2
+                crop(0, 0, 0, 10.0, -1.0, 1.0), // outside-AOI area must be clipped
+                crop(1, 0, 0, 5.0, 0.0, 1.0),
+                crop(0, 1, 0, 40.0, 0.0, 2.0), // separate acquisition cycle
+                crop(2, 0, 0, 8.0, 0.0, 1.0),
+                crop(0, 0, 0, 15.0, -1.0, 1.0), // overlapping duplicate
+            ];
+            if reverse {
+                crops.reverse();
+            }
+            accumulate(&mut states, crops, &originals, &[2.0, 2.0, 2.0]).unwrap();
+            assert_eq!(states[0][0].completed_at_s, Some(20.0));
+            assert_eq!(states[0][1].completed_at_s, Some(40.0));
+            assert_eq!(states[1][0].completed_at_s, None);
+            assert!(!states[1][0].coverage.complete);
+            assert_eq!(states[1][0].coverage.area, 1.0);
+            assert_eq!(states[2][0].completed_at_s, Some(12.0));
+        }
+    }
 }

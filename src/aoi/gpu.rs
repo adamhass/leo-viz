@@ -22,7 +22,7 @@ pub(super) struct Segment {
     pub end: [f32; 4],
     pub anchor: [f32; 4],
     pub radius: f32,
-    pub color: [u8; 4],
+    pub color_index: u32,
     pub scales: [f32; 2],
 }
 
@@ -31,7 +31,7 @@ pub(super) struct Segment {
 pub(super) struct Dot {
     pub anchor: [f32; 4],
     pub radius: f32,
-    pub color: [u8; 4],
+    pub color_index: u32,
 }
 
 #[repr(C)]
@@ -40,24 +40,30 @@ pub(super) struct Triangle {
     pub points: [[f32; 4]; 3],
     pub anchor: [f32; 4],
     pub radius: f32,
-    pub color: [u8; 4],
+    pub color_index: u32,
 }
 
 pub(super) struct Geometry {
     id: usize,
+    pub colors: Arc<super::colors::Colors>,
     pub(super) segments: Vec<Segment>,
     pub(super) dots: Vec<Dot>,
     pub(super) triangles: Vec<Triangle>,
 }
 
 impl Geometry {
-    pub fn new(mut segments: Vec<Segment>, dots: Vec<Dot>) -> Self {
+    pub fn new(
+        mut segments: Vec<Segment>,
+        dots: Vec<Dot>,
+        colors: Arc<super::colors::Colors>,
+    ) -> Self {
         static NEXT_ID: AtomicUsize = AtomicUsize::new(0);
         segments.sort_unstable_by_key(|segment| {
             (segment.scales[0].to_bits(), segment.scales[1].to_bits())
         });
         Self {
             id: NEXT_ID.fetch_add(1, Ordering::Relaxed),
+            colors,
             segments,
             dots,
             triangles: Vec::new(),
@@ -78,6 +84,8 @@ struct Uniforms {
 
 struct UploadedGeometry {
     owner: Weak<Geometry>,
+    colors: wgpu::Buffer,
+    color_revision: u64,
     segments: Vec<(wgpu::Buffer, u32, [f32; 2])>,
     dots: wgpu::Buffer,
     dot_count: u32,
@@ -105,16 +113,30 @@ impl Resources {
     fn new(device: &wgpu::Device, format: wgpu::TextureFormat) -> Self {
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("aoi_uniform_layout"),
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: wgpu::BufferSize::new(std::mem::size_of::<Uniforms>() as u64),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: wgpu::BufferSize::new(
+                            std::mem::size_of::<Uniforms>() as u64
+                        ),
+                    },
+                    count: None,
                 },
-                count: None,
-            }],
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: wgpu::BufferSize::new(4),
+                    },
+                    count: None,
+                },
+            ],
         });
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("aoi_shader"),
@@ -165,7 +187,7 @@ impl Resources {
             std::mem::size_of::<Segment>(),
             &wgpu::vertex_attr_array![
                 0 => Float32x4, 1 => Float32x4, 2 => Float32x4,
-                3 => Float32, 4 => Unorm8x4, 5 => Float32x2,
+                3 => Float32, 4 => Uint32, 5 => Float32x2,
             ],
         );
         let dots = pipeline(
@@ -173,7 +195,7 @@ impl Resources {
             "fragment",
             std::mem::size_of::<Dot>(),
             &wgpu::vertex_attr_array![
-                0 => Float32x4, 1 => Float32, 2 => Unorm8x4,
+                0 => Float32x4, 1 => Float32, 2 => Uint32,
             ],
         );
         let fills = pipeline(
@@ -181,7 +203,7 @@ impl Resources {
             "fill_fragment",
             std::mem::size_of::<Triangle>(),
             &wgpu::vertex_attr_array![0 => Float32x4, 1 => Float32x4, 2 => Float32x4,
-                3 => Float32x4, 4 => Float32, 5 => Unorm8x4],
+                3 => Float32x4, 4 => Float32, 5 => Uint32],
         );
         Self {
             #[cfg(test)]
@@ -217,7 +239,16 @@ impl Resources {
                         usage: wgpu::BufferUsages::VERTEX,
                     })
                 };
+                let palette = callback.geometry.colors.state.read().unwrap();
+                let bytes = bytemuck::cast_slice(&palette.rgba);
+                let colors = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("aoi_colors"),
+                    contents: if bytes.is_empty() { &[0; 4] } else { bytes },
+                    usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                });
                 UploadedGeometry {
+                    colors,
+                    color_revision: palette.revision,
                     owner: Arc::downgrade(&callback.geometry),
                     segments: callback
                         .geometry
@@ -259,6 +290,13 @@ impl Resources {
                         .collect(),
                 }
             });
+        let geometry = self.geometry.get_mut(&callback.geometry.id).unwrap();
+        let palette = callback.geometry.colors.state.read().unwrap();
+        if geometry.color_revision != palette.revision {
+            queue.write_buffer(&geometry.colors, 0, bytemuck::cast_slice(&palette.rgba));
+            geometry.color_revision = palette.revision;
+        }
+        drop(palette);
         let view = self
             .views
             .entry((callback.view_id, callback.geometry.id))
@@ -272,10 +310,16 @@ impl Resources {
                 let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
                     label: Some("aoi_view_bind_group"),
                     layout: &self.layout,
-                    entries: &[wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: uniforms.as_entire_binding(),
-                    }],
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: uniforms.as_entire_binding(),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: geometry.colors.as_entire_binding(),
+                        },
+                    ],
                 });
                 View {
                     uniforms,

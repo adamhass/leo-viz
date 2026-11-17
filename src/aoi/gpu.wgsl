@@ -7,6 +7,11 @@ struct Uniforms {
     appearance: vec4<f32>,
 }
 @group(0) @binding(0) var<uniform> u: Uniforms;
+@group(0) @binding(1) var<storage, read> colors: array<u32>;
+
+fn aoi_color(index: u32) -> vec4<f32> {
+    return unpack4x8unorm(colors[index]);
+}
 
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
@@ -68,7 +73,7 @@ fn line_vertex(
     @location(1) end: vec4<f32>,
     @location(2) bound: vec4<f32>,
     @location(3) radius: f32,
-    @location(4) color: vec4<f32>,
+    @location(4) color_index: u32,
     @location(5) scales: vec2<f32>,
 ) -> VertexOutput {
     if radius * u.params.y < 3.0 || u.params.y <= scales.x || u.params.y > scales.y || !visible(bound, radius) {
@@ -91,7 +96,7 @@ fn line_vertex(
     let outer = half_width + 0.5 / u.viewport.z;
     let perpendicular = vec2(-delta.y, delta.x) / length;
     let position = mix(a, b, corner.x) + perpendicular * corner.y * outer;
-    return output_vertex(position, vec2(0.0, corner.y * outer), color, half_width);
+    return output_vertex(position, vec2(0.0, corner.y * outer), aoi_color(color_index), half_width);
 }
 
 @vertex
@@ -99,14 +104,14 @@ fn dot_vertex(
     @builtin(vertex_index) vertex: u32,
     @location(0) anchor: vec4<f32>,
     @location(1) radius: f32,
-    @location(2) color: vec4<f32>,
+    @location(2) color_index: u32,
 ) -> VertexOutput {
     let center = project(anchor);
     if radius * u.params.y >= 3.0 || center.z < 0.0 || !visible(anchor, radius) { return clipped(); }
     let corner = CORNERS[vertex] * vec2(2.0, 1.0) - vec2(1.0, 0.0);
     let half_width = 1.25;
     let local = corner * (half_width + 0.5 / u.viewport.z);
-    return output_vertex(center.xy + local, local, color, half_width);
+    return output_vertex(center.xy + local, local, aoi_color(color_index), half_width);
 }
 
 @fragment
@@ -132,10 +137,10 @@ struct FillOutput {
 fn fill_vertex(
     @builtin(vertex_index) vertex: u32,
     @location(0) a: vec4<f32>, @location(1) b: vec4<f32>, @location(2) c: vec4<f32>,
-    @location(3) anchor: vec4<f32>, @location(4) radius: f32, @location(5) color: vec4<f32>,
+    @location(3) anchor: vec4<f32>, @location(4) radius: f32, @location(5) color_index: u32,
 ) -> FillOutput {
     var output: FillOutput;
-    output.color = color;
+    output.color = aoi_color(color_index);
     output.horizon = -1.0;
     output.position = vec4(2.0, 2.0, 0.0, 1.0);
     if radius * u.params.y < 3.0 || !visible(anchor, radius) { return output; }

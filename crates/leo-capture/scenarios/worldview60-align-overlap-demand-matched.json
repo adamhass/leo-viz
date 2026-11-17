@@ -1,0 +1,12 @@
+{
+  "preset": "../../../artifacts/job-design/worldview60-ongoing-20261113/preset.json.gz",
+  "output": "../../../artifacts/job-design/worldview60-overlap-demand-matched-20261116",
+  "policy": {
+    "method": "overlap_balanced",
+    "seed": 20261113,
+    "priority_base": 2.0,
+    "daily_load_target": "original_demand",
+    "local_balance_weight": 0.25,
+    "within_day_order": "solar_window"
+  }
+}

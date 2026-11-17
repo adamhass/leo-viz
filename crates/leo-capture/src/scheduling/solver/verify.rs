@@ -2,11 +2,12 @@ use super::*;
 use geo::{Area, BooleanOps, MultiPolygon};
 use std::{collections::BTreeMap, io::BufRead};
 
-const AREA_TOLERANCE: f64 = 1e-6;
+pub(super) const AREA_TOLERANCE: f64 = 1e-6;
 #[derive(Default)]
 pub(super) struct Request {
     patches: BTreeMap<usize, crate::geometry::Shape>,
     pub(super) area: f64,
+    pub(super) gross_area: f64,
     pub(super) complete: bool,
 }
 impl Request {
@@ -16,6 +17,7 @@ impl Request {
         shape: &crate::geometry::Shape,
         total: f64,
     ) -> Result<()> {
+        self.gross_area += shape.unsigned_area();
         if self.complete {
             return Ok(());
         }
@@ -65,7 +67,7 @@ pub(super) fn validate_maneuvers(model: &Model, g: &Graph, path: &[u32]) -> Resu
         let a = g.actions.get(id as usize).ok_or("Invalid capture ID")?;
         let next = model
             .manifest
-            .modes
+            .modes_for(g.satellite)
             .get(a.mode)
             .ok_or("Invalid pointing mode")?;
         let slew = previous.transition_s(next, &model.manifest.config.options);
@@ -80,10 +82,11 @@ pub(super) fn validate_maneuvers(model: &Model, g: &Graph, path: &[u32]) -> Resu
     }
     Ok(())
 }
-pub(super) fn candidates(
+pub(super) fn candidates_with_rewards(
     model: &Model,
     config: &Config,
     candidates: &[Candidate],
+    evaluation_models: &BTreeMap<String, reward::RewardModel>,
 ) -> Result<(usize, Vec<serde_json::Value>)> {
     for candidate in candidates {
         if candidate.plan.len() != model.graphs.len() {
@@ -212,8 +215,16 @@ pub(super) fn candidates(
     let jobs_in_scope = model.included_jobs.iter().filter(|&&yes| yes).count();
     let index: BTreeMap<_, _> = levels.iter().enumerate().map(|(i, &p)| (p, i)).collect();
     let mut scores = Vec::new();
+    let mut true_rewards = Vec::new();
     let mut summaries = Vec::new();
     for state in &states {
+        let mut earned = reward::Evaluation::default();
+        let mut cross_rewards: BTreeMap<_, _> = evaluation_models
+            .keys()
+            .map(|id| (id.clone(), reward::Evaluation::default()))
+            .collect();
+        let mut unique_area = 0.0;
+        let mut gross_area = 0.0;
         let mut score = Score {
             complete_requests: vec![0; levels.len()],
             fractional_requests: 0.0,
@@ -248,6 +259,26 @@ pub(super) fn candidates(
             };
             let counts = collection_modes.entry(mode).or_default();
             for request in requests {
+                let area = model.atlas.job_areas_km2[j];
+                let unique = request.area.clamp(0.0, area);
+                earned.add(
+                    &config.reward,
+                    &model.jobs[j],
+                    area,
+                    unique,
+                    request.complete,
+                )?;
+                for (id, evaluator) in &mut cross_rewards {
+                    evaluator.add(
+                        &evaluation_models[id],
+                        &model.jobs[j],
+                        area,
+                        unique,
+                        request.complete,
+                    )?;
+                }
+                unique_area += unique;
+                gross_area += request.gross_area;
                 counts[0] += 1;
                 counts[if request.complete {
                     1
@@ -265,6 +296,11 @@ pub(super) fn candidates(
         let due = due_requests.iter().sum::<u64>();
         let met = score.complete_requests.iter().sum::<u64>();
         summaries.push(serde_json::json!({
+            "true_reward":earned.true_reward,
+            "reward_evaluation":earned,
+            "rewards_by_model":cross_rewards,
+            "unique_job_area_km2":unique_area,
+            "repeated_job_area_km2":(gross_area-unique_area).max(0.0),
             "path_feasibility":"passed","coverage_verification":"polygon_union",
             "relative_area_tolerance":AREA_TOLERANCE,
             "deadline_assessment":"planned coverage, not executed acquisitions",
@@ -275,6 +311,7 @@ pub(super) fn candidates(
             "jobs_without_due_deadlines":jobs_in_scope as u64-due_jobs.iter().sum::<u64>(),
             "due_acquisition_deadlines":due,
             "planned_met_deadlines":met,
+            "planned_met_rate_percent":(due>0).then(||100.0*met as f64/due as f64),
             "planned_missed_deadlines":due-met,
             "planned_miss_rate_percent":miss_rate(due,met),
             "missed_deadlines_with_partial_coverage":partial.iter().sum::<u64>(),
@@ -296,6 +333,7 @@ pub(super) fn candidates(
                 "missed_deadlines_with_partial_coverage":partial[i],"missed_deadlines_with_no_coverage":no_coverage[i]
             })).collect::<Vec<_>>()
         }));
+        true_rewards.push(earned.true_reward);
         scores.push(score);
     }
     let reports: Vec<_> = candidates
@@ -307,12 +345,36 @@ pub(super) fn candidates(
             value["capture_count"] = serde_json::json!(c.plan.iter().map(Vec::len).sum::<usize>());
             value["sampled_score"] =
                 serde_json::json!(search::evaluate(model, &search::counts(model, &c.plan)));
-            value
+            value["sampled_true_reward"] =
+                serde_json::json!(weighted::sampled_reward(model, &config.reward, &c.plan)?);
+            Ok(value)
         })
-        .collect();
+        .collect::<Result<Vec<_>>>()?;
     let mut best = 0;
     for i in 1..candidates.len() {
-        if scores[mapping[i]].better_than(&scores[mapping[best]]) {
+        let improves = if config.optimizer.legacy() {
+            scores[mapping[i]].better_than(&scores[mapping[best]])
+        } else {
+            true_rewards[mapping[i]]
+                .total_cmp(&true_rewards[mapping[best]])
+                .then(
+                    scores[mapping[i]]
+                        .complete_requests
+                        .iter()
+                        .sum::<u64>()
+                        .cmp(&scores[mapping[best]].complete_requests.iter().sum::<u64>()),
+                )
+                .then_with(|| {
+                    candidates[best]
+                        .plan
+                        .iter()
+                        .map(Vec::len)
+                        .sum::<usize>()
+                        .cmp(&candidates[i].plan.iter().map(Vec::len).sum::<usize>())
+                })
+                .is_gt()
+        };
+        if improves {
             best = i;
         }
     }

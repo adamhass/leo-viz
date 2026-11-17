@@ -184,6 +184,7 @@ pub(crate) struct Preview {
     boundaries: Vec<Boundary>,
     spatial: super::spatial::Index,
     mesh_cache: Mutex<Vec<(Vec<f64>, Arc<Mesh>)>>,
+    colors: OnceLock<Arc<super::colors::Colors>>,
     gpu_geometry: OnceLock<Arc<super::gpu::Geometry>>,
     projected_geometry: Mutex<Vec<(i32, Arc<super::gpu::Geometry>)>>,
     #[cfg(not(target_arch = "wasm32"))]
@@ -522,6 +523,7 @@ impl Preview {
             boundaries: Vec::with_capacity(count),
             spatial: super::spatial::Index::default(),
             mesh_cache: Mutex::new(Vec::new()),
+            colors: OnceLock::new(),
             gpu_geometry: OnceLock::new(),
             projected_geometry: Mutex::new(Vec::new()),
             #[cfg(not(target_arch = "wasm32"))]
@@ -666,15 +668,31 @@ impl Preview {
         self
     }
 
+    fn colors(&self) -> &Arc<super::colors::Colors> {
+        self.colors.get_or_init(|| {
+            Arc::new(super::colors::Colors::new(
+                self.boundaries.iter().map(|b| b.color),
+            ))
+        })
+    }
+
+    pub(crate) fn set_colors(&self, colors: &[[u8; 3]]) {
+        self.colors().update(colors);
+    }
+
+    pub(crate) fn color_revision(&self) -> u64 {
+        self.colors().state.read().unwrap().revision
+    }
+
     pub(super) fn gpu_geometry(&self) -> Arc<super::gpu::Geometry> {
         Arc::clone(self.gpu_geometry.get_or_init(|| {
             let mut segments = Vec::new();
             let mut triangles = Vec::new();
             let mut dots = Vec::with_capacity(self.boundaries.len());
-            for boundary in &self.boundaries {
+            for (index, boundary) in self.boundaries.iter().enumerate() {
                 let pack = |p: Vector3<f64>| [p.x as f32, p.y as f32, p.z as f32, 0.0];
                 let anchor = pack(boundary.anchor);
-                let color = [boundary.color[0], boundary.color[1], boundary.color[2], 255];
+                let color_index = index as u32;
                 triangles.extend(
                     boundary
                         .fill
@@ -684,13 +702,13 @@ impl Preview {
                             points: t.map(pack),
                             anchor,
                             radius: boundary.radius as f32,
-                            color,
+                            color_index,
                         }),
                 );
                 dots.push(super::gpu::Dot {
                     anchor,
                     radius: boundary.radius as f32,
-                    color,
+                    color_index,
                 });
                 for detail in &boundary.rings {
                     for (level, (error, points)) in detail.levels.iter().enumerate() {
@@ -709,14 +727,14 @@ impl Preview {
                                 end: pack(edge[1]),
                                 anchor,
                                 radius: boundary.radius as f32,
-                                color,
+                                color_index,
                                 scales: [min_scale, max_scale],
                             });
                         }
                     }
                 }
             }
-            let mut geometry = super::gpu::Geometry::new(segments, dots);
+            let mut geometry = super::gpu::Geometry::new(segments, dots, Arc::clone(self.colors()));
             geometry.triangles = triangles;
             Arc::new(geometry)
         }))
@@ -732,7 +750,7 @@ impl Preview {
         }
         let mut segments = Vec::new();
         let mut dots = Vec::new();
-        for boundary in &self.boundaries {
+        for (index, boundary) in self.boundaries.iter().enumerate() {
             let paths = projected_boundary(boundary, projection);
             let Some(first) = paths.first().and_then(|path| path.first()) else {
                 continue;
@@ -750,11 +768,11 @@ impl Preview {
                 .fold(0.0_f64, f64::max)
                 .max(1e-9) as f32;
             let anchor = super::gpu::split_point(anchor);
-            let color = [boundary.color[0], boundary.color[1], boundary.color[2], 255];
+            let color_index = index as u32;
             dots.push(super::gpu::Dot {
                 anchor,
                 radius,
-                color,
+                color_index,
             });
             for path in paths {
                 let detail = Detail::with_unit(path, 180.0 / std::f64::consts::PI);
@@ -774,14 +792,18 @@ impl Preview {
                             end: super::gpu::split_point([edge[1].x, edge[1].y]),
                             anchor,
                             radius,
-                            color,
+                            color_index,
                             scales: [min_scale, max_scale],
                         });
                     }
                 }
             }
         }
-        let geometry = Arc::new(super::gpu::Geometry::new(segments, dots));
+        let geometry = Arc::new(super::gpu::Geometry::new(
+            segments,
+            dots,
+            Arc::clone(self.colors()),
+        ));
         let mut cache = self.projected_geometry.lock().unwrap();
         if cache.len() >= 4 {
             cache.remove(0);
@@ -1145,7 +1167,9 @@ impl Overlay {
             let [x, y] = super::gpu::join_point(p);
             transform.position_from_point(&PlotPoint::new(x, y))
         };
-        let color = |c: [u8; 4]| {
+        let colors = geometry.colors.state.read().unwrap();
+        let color = |index: u32| {
+            let c = colors.rgba[index as usize];
             Color32::from_rgba_unmultiplied(
                 c[0],
                 c[1],
@@ -1166,7 +1190,7 @@ impl Overlay {
                 .frame()
                 .intersects(Rect::from_two_pos(a, b).expand(1.0))
             {
-                line_quad(&mut mesh, a, b, color(edge.color), 1.2);
+                line_quad(&mut mesh, a, b, color(edge.color_index), 1.2);
             }
         }
         for dot in &geometry.dots {
@@ -1174,7 +1198,7 @@ impl Overlay {
             if f64::from(dot.radius) * scale < 3.0 && transform.frame().contains(anchor) {
                 mesh.add_colored_rect(
                     Rect::from_center_size(anchor, egui::vec2(2.5, 2.5)),
-                    color(dot.color),
+                    color(dot.color_index),
                 );
             }
         }
@@ -1200,6 +1224,7 @@ impl Overlay {
             self.polar_scale,
             self.opacity as f64,
             self.fill_opacity as f64,
+            self.preview.color_revision() as f64,
         ]);
         let scale = transform
             .dpos_dvalue_x()
@@ -1267,12 +1292,14 @@ impl Overlay {
         let columns = (frame.width() / 3.0).ceil().max(1.0) as usize;
         let rows = (frame.height() / 3.0).ceil().max(1.0) as usize;
         let mut dots = vec![false; columns * rows];
+        let colors = self.preview.colors().state.read().unwrap();
         for index in candidates {
             let boundary = &self.preview.boundaries[index];
+            let rgb = colors.rgba[index];
             let color = Color32::from_rgba_unmultiplied(
-                boundary.color[0],
-                boundary.color[1],
-                boundary.color[2],
+                rgb[0],
+                rgb[1],
+                rgb[2],
                 (self.opacity * 255.0).round() as u8,
             );
             let (anchor, normal) = self.project(boundary.anchor);
@@ -1306,9 +1333,9 @@ impl Overlay {
             }
             if self.fill_opacity > 0.0 {
                 let fill_color = Color32::from_rgba_unmultiplied(
-                    boundary.color[0],
-                    boundary.color[1],
-                    boundary.color[2],
+                    rgb[0],
+                    rgb[1],
+                    rgb[2],
                     (self.fill_opacity * 255.0).round() as u8,
                 );
                 boundary
@@ -1451,6 +1478,50 @@ impl PlotItem for Overlay {
 mod tests {
     use super::*;
     use egui::Pos2;
+
+    #[test]
+    fn palette_changes_refresh_cpu_meshes_without_rebuilding_geometry() {
+        let preview = Arc::new(
+            Preview::from_geojson(
+                serde_json::json!({
+                    "type": "Polygon", "coordinates": [[[-94,-4],[-86,-4],[-86,4],[-94,4],[-94,-4]]]
+                }),
+                [-90.0, 0.0],
+                [0, 0, 255],
+            )
+            .unwrap(),
+        );
+        let overlay = Overlay::new(preview.clone(), Matrix3::identity(), 6371.0, 0.0, 1.0);
+        let frame = Rect::from_min_size(Pos2::ZERO, egui::vec2(600.0, 600.0));
+        let transform =
+            PlotTransform::new(frame, PlotBounds::new_symmetrical(7000.0), [false, false]);
+        let before = overlay.cached_mesh(&transform);
+        assert!(before.vertices.iter().any(|v| v.color == Color32::BLUE));
+        let geometry = preview.gpu_geometry();
+        let projection = crate::projection::ProjectionKind::Equirectangular;
+        let projected = preview.projected_geometry(projection);
+        preview.set_colors(&[[255, 0, 0]]);
+        let after = overlay.cached_mesh(&transform);
+        assert!(!Arc::ptr_eq(&before, &after));
+        assert!(after.vertices.iter().any(|v| v.color == Color32::RED));
+        assert!(Arc::ptr_eq(&geometry, &preview.gpu_geometry()));
+        assert!(Arc::ptr_eq(
+            &projected,
+            &preview.projected_geometry(projection)
+        ));
+        let map = PlotTransform::new(
+            frame,
+            PlotBounds::from_min_max([-180.0, -90.0], [180.0, 90.0]),
+            [false, false],
+        );
+        assert!(overlay
+            .projected_mesh(&map, projection)
+            .vertices
+            .iter()
+            .any(|v| v.color == Color32::RED));
+        preview.set_colors(&[[255, 0, 0]]);
+        assert!(Arc::ptr_eq(&after, &overlay.cached_mesh(&transform)));
+    }
 
     #[test]
     #[cfg(not(target_arch = "wasm32"))]
@@ -1779,7 +1850,10 @@ mod tests {
         let gpu = colored.gpu_geometry();
         for (i, aoi) in colored.aois.iter().enumerate() {
             let rgb = colors[&aoi.key()];
-            assert_eq!(gpu.dots[i].color, [rgb[0], rgb[1], rgb[2], 255]);
+            assert_eq!(
+                gpu.colors.state.read().unwrap().rgba[gpu.dots[i].color_index as usize],
+                [rgb[0], rgb[1], rgb[2], 255]
+            );
             assert_eq!(colored.boundaries[i].color, rgb);
         }
         assert_eq!(serial.aois, parallel.aois);

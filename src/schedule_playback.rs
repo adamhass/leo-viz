@@ -1,9 +1,12 @@
 //! Schedule playback on the regular globe/map, using immutable saved inputs.
 #[cfg(not(target_arch = "wasm32"))]
+mod catalog;
+#[cfg(not(target_arch = "wasm32"))]
 mod loader;
 mod overlay;
 mod panel;
 mod scene;
+mod status;
 #[cfg(test)]
 mod tests;
 
@@ -15,8 +18,12 @@ use leo_sim::geometry::Vector;
 use loader::LoadEvent;
 pub(crate) use overlay::Overlay;
 use std::sync::Arc;
-pub(crate) const ACTIVE_COLOR: [u8; 3] = [75, 215, 175];
+pub(crate) const CAPTURED_COLOR: [u8; 3] = [255, 255, 255];
+pub(crate) const ACTIVE_COLOR: [u8; 3] = [75, 215, 125];
+pub(crate) const DAILY_COLOR: [u8; 3] = [65, 150, 255];
+pub(crate) const UNAVAILABLE_COLOR: [u8; 3] = [255, 215, 60];
 pub(crate) const MISSED_COLOR: [u8; 3] = [255, 75, 75];
+pub(crate) const MISSED_UNAVAILABLE_COLOR: [u8; 3] = [255, 145, 45];
 pub(crate) const INACTIVE_COLOR: [u8; 3] = [75, 82, 92];
 pub(crate) const TRAIL_SECONDS: f64 = 900.0;
 const DEFAULT_REPLAY_PATH: &str = concat!(
@@ -35,9 +42,14 @@ pub(crate) struct Scene {
     pub replay: Replay,
     pub layers: Vec<Arc<Preview>>,
     pub footprints: Vec<Footprint>,
+    job_colors: status::JobColors,
+    layer_jobs: Vec<Vec<usize>>,
+    color_time: std::sync::Mutex<Option<f64>>,
 }
 pub(crate) struct Panel {
     path: String,
+    #[cfg(not(target_arch = "wasm32"))]
+    schedules: Vec<catalog::Schedule>,
     pub auto_load: bool,
     error: Option<String>,
     progress: (f32, String),
@@ -52,9 +64,25 @@ impl Default for Panel {
         let supplied = std::env::var("LEO_VIZ_SCHEDULE").ok();
         #[cfg(target_arch = "wasm32")]
         let supplied: Option<String> = None;
+        #[cfg(not(target_arch = "wasm32"))]
+        let schedules = catalog::discover(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")),
+            supplied.as_deref(),
+        );
+        let path = supplied
+            .clone()
+            .unwrap_or_else(|| DEFAULT_REPLAY_PATH.into());
+        #[cfg(not(target_arch = "wasm32"))]
+        let path = if supplied.is_none() {
+            schedules.first().map_or(path, |first| first.path.clone())
+        } else {
+            path
+        };
         Self {
+            #[cfg(not(target_arch = "wasm32"))]
+            schedules,
             auto_load: supplied.is_some(),
-            path: supplied.unwrap_or_else(|| DEFAULT_REPLAY_PATH.into()),
+            path,
             error: None,
             progress: (0.0, String::new()),
             #[cfg(not(target_arch = "wasm32"))]

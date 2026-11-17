@@ -118,7 +118,7 @@ impl Panel {
             );
         }
         Ok(Some(leo_capture::storage::Document {
-            schema_version: 5,
+            schema_version: 6,
             generator: self
                 .applied
                 .clone()

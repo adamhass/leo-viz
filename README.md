@@ -546,6 +546,9 @@ provides headless acquisition graphs, job-design tools and an experimental path
 scheduler. See [job design](crates/leo-capture/JOB-DESIGN.md) and the
 [solver experiments](crates/leo-capture/SCHEDULING-SOLVER.md) for the workload
 contract, measured results and model limitations.
+The [scheduler comparison workflow](crates/leo-capture/SCHEDULING-EXPERIMENTS.md)
+separates workload timing, reward models and optimizers, and reports Met % plus
+duplicate-free polygon reward for each resulting plan.
 
 ## Scheduled observation replay
 

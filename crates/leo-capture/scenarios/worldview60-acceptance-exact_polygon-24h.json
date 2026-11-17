@@ -1,0 +1,31 @@
+{
+  "output": "../../../artifacts/scheduling-solutions/worldview60-acceptance-exact_polygon-20261116",
+  "workloads": [
+    {
+      "id": "randomized_deadlines",
+      "timing_policy": "uniform_next_deadline_5h_to_cadence_seed_20261113",
+      "graph_directory": "../../../artifacts/scheduling-graphs/worldview60-ongoing-24h-20261113"
+    }
+  ],
+  "reward_models": {
+    "area_only": {
+      "priority_base": 1.0
+    },
+    "area_priority_c2": {
+      "priority_base": 2.0
+    }
+  },
+  "optimizers": [
+    "independent_paths",
+    "coordinate_improvement",
+    "lagrangian"
+  ],
+  "solver": {
+    "horizon_s": 86400,
+    "samples_per_axis": 3,
+    "iterations": 30,
+    "repair_sweeps": 2,
+    "workers": 4,
+    "acceptance": "exact_polygon"
+  }
+}

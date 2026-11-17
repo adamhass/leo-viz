@@ -4100,6 +4100,9 @@ impl ViewerState {
             available
         };
         let schedule = self.tabs[tab_idx].observation_replay.clone();
+        if let Some(scene) = &schedule {
+            scene.update_colors(self.tabs[tab_idx].settings.time);
+        }
         let replay_epoch =
             crate::schedule_playback::epoch(&self.tabs[tab_idx], self.start_timestamp);
         let settings = &self.tabs[tab_idx].settings;

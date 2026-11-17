@@ -1,0 +1,1013 @@
+{
+  "schema_version": 1,
+  "status": "complete",
+  "release_binary_sha256": "1c55a24aa06ae8a98ad256b6acec37fe1d81804c36bcdcc8bb1ebb600b361ac7",
+  "method": "Sequential runs of both new graphs using one release binary, identical archived jobs, reward models and search budgets. No concurrent builds or tests. The fixed-grid rows are the archived exact-polygon baseline, not a freshly timed run. Wall times are single-run measurements and may vary with machine load.",
+  "comparison": "artifacts/scheduling-solutions/worldview60-strips-comparison-buffered-20261116/comparison.json",
+  "elapsed_s": 275.680607452,
+  "reference": {
+    "comparison": "artifacts/scheduling-solutions/worldview60-acceptance-exact_polygon-20261116/comparison.json",
+    "elapsed_s": 713.378084876
+  },
+  "workload": {
+    "preset_hash_fnv1a64": 12630355598160897441,
+    "jobs": 53000,
+    "due_deadlines": 2334,
+    "jobs_without_due_deadlines": 50666,
+    "epoch_unix_s": 1794528000.0,
+    "horizon_s": 86400,
+    "timing_policy": "uniform_next_deadline_5h_to_cadence_seed_20261113",
+    "priorities": {
+      "1": 10580,
+      "2": 10552,
+      "3": 10467,
+      "4": 10681,
+      "5": 10720
+    },
+    "job_reward_modes": {
+      "complete_observation": 26523,
+      "unique_area": 26477
+    }
+  },
+  "solver": {
+    "acceptance": "exact_polygon",
+    "graph_directory": "",
+    "horizon_s": 86400.0,
+    "incumbent_schedule": null,
+    "iterations": 30,
+    "iterations_per_priority": 12,
+    "job_cadence_hours": null,
+    "optimizer": "lagrangian",
+    "output": "",
+    "repair_sweeps": 2,
+    "reward": {
+      "priority_base": 2.0
+    },
+    "samples_per_axis": 3,
+    "workers": 4
+  },
+  "reward_models": {
+    "area_only": {
+      "priority_base": 1.0
+    },
+    "area_priority_c2": {
+      "priority_base": 2.0
+    }
+  },
+  "semantics": {
+    "comparability": "Optimizer comparisons within a workload/reward cell share the same graph and objective. When cadence/timing changes demand within the horizon, compare due counts and available reward too.",
+    "cost": "Graph/witness preparation and the optional polygon cache are shared per workload and reported separately. Acceptance evaluation is included in search time. Each optimizer pays for its own search and final verification.",
+    "cross_evaluation": "Each selected plan is evaluated under every reward model, independently of which model generated it.",
+    "duplicates": "Polygon union per job/deadline across all satellites; repeat work earns no additional reward. Distinct jobs can share one useful capture.",
+    "reward": "Geometric area in km² × c^priority, with the job's unique-area or completed-observation policy.",
+    "timing_variants": "Supplied upstream as separate graphs; this workflow does not alter deadlines or implement alignment."
+  },
+  "graphs": [
+    {
+      "id": "fixed_grid",
+      "directory": "artifacts/scheduling-graphs/worldview60-ongoing-24h-20261113",
+      "manifest_hash_fnv1a64": 6638968699434670051,
+      "builder": "fixed_grid",
+      "strip_options": null,
+      "actions": 141773,
+      "nodes": 283666,
+      "edges": 12030289,
+      "crop_records": 350193,
+      "graph_and_action_bytes": 181941362,
+      "build_s": 587.156672285,
+      "build_workers": 8,
+      "prepared_once_s": 20.88137926,
+      "polygon_cache_prepared_once_s": 6.587037524,
+      "incumbent_from": null,
+      "timing_source": "archived_reference"
+    },
+    {
+      "id": "aoi_strips",
+      "directory": "artifacts/scheduling-graphs/worldview60-aoi-strips-24h-20261116",
+      "manifest_hash_fnv1a64": 9206198080529469321,
+      "builder": "aoi_strips",
+      "strip_options": {
+        "access_step_s": 30.0,
+        "boundary_margin_km": 0.05,
+        "time_margin_s": 0.02,
+        "max_duration_s": 600.0,
+        "clustering": null
+      },
+      "actions": 88728,
+      "nodes": 266304,
+      "edges": 2115511,
+      "crop_records": 265398,
+      "graph_and_action_bytes": 115920331,
+      "build_s": 31.541897466,
+      "build_workers": 8,
+      "prepared_once_s": 5.222249996,
+      "polygon_cache_prepared_once_s": 3.588537264,
+      "incumbent_from": null,
+      "timing_source": "current_run",
+      "construction": {
+        "base_actions": 88728,
+        "refinement_actions": 0,
+        "shared_actions": 45315,
+        "clustered_pairs": 0,
+        "base_proposals": 118076,
+        "refinement_proposals": 0,
+        "duration_sum_s": 138824.24000000188,
+        "duration_min_s": 0.11600000000180444,
+        "duration_max_s": 26.518000000003667,
+        "duration_mean_s": 1.564604634388264
+      }
+    },
+    {
+      "id": "clustered_strips",
+      "directory": "artifacts/scheduling-graphs/worldview60-clustered-strips-24h-20261116",
+      "manifest_hash_fnv1a64": 2546115191452053608,
+      "builder": "aoi_strips",
+      "strip_options": {
+        "access_step_s": 30.0,
+        "boundary_margin_km": 0.05,
+        "time_margin_s": 0.02,
+        "max_duration_s": 600.0,
+        "clustering": {
+          "neighbors": 4,
+          "max_gap_s": 3.0,
+          "max_span_s": 60.0,
+          "max_width_swaths": 4.0
+        }
+      },
+      "actions": 101743,
+      "nodes": 305349,
+      "edges": 3325698,
+      "crop_records": 444430,
+      "graph_and_action_bytes": 188230868,
+      "build_s": 47.542660681,
+      "build_workers": 8,
+      "prepared_once_s": 6.057621411,
+      "polygon_cache_prepared_once_s": 3.133664327,
+      "incumbent_from": "aoi_strips",
+      "timing_source": "current_run",
+      "construction": {
+        "base_actions": 88728,
+        "refinement_actions": 13015,
+        "shared_actions": 58330,
+        "clustered_pairs": 9710,
+        "base_proposals": 118076,
+        "refinement_proposals": 34184,
+        "duration_sum_s": 186790.1920000024,
+        "duration_min_s": 0.11600000000180444,
+        "duration_max_s": 26.518000000003667,
+        "duration_mean_s": 1.835902145602178
+      }
+    }
+  ],
+  "results": [
+    {
+      "acceptance": {
+        "accepted_paths": 0,
+        "mode": "none",
+        "proposed_paths": 0
+      },
+      "capture_count": 25121,
+      "due_deadlines": 2334,
+      "met_deadlines": 1049,
+      "met_percent": 44.94430162810625,
+      "missed_deadlines": 1285,
+      "missed_percent": 55.05569837189375,
+      "optimized_for": "area_only",
+      "optimizer": "independent_paths",
+      "repeated_job_area_km2": 838178.2401138435,
+      "report": "artifacts/scheduling-solutions/worldview60-acceptance-exact_polygon-20261116/randomized_deadlines/area_only/independent_paths/report.json",
+      "rewards_by_model": {
+        "area_only": {
+          "available_reward": 173341.7149435618,
+          "reward_percent": 49.30849407109262,
+          "true_reward": 85472.18923567643
+        },
+        "area_priority_c2": {
+          "available_reward": 2156648.549153164,
+          "reward_percent": 49.768068298455134,
+          "true_reward": 1073322.3229001884
+        }
+      },
+      "schedule": "artifacts/scheduling-solutions/worldview60-acceptance-exact_polygon-20261116/randomized_deadlines/area_only/independent_paths/schedule.json",
+      "search_s": 0.06960623,
+      "selected_candidate": "independent_paths",
+      "timing_policy": "uniform_next_deadline_5h_to_cadence_seed_20261113",
+      "true_reward": 85472.18923567643,
+      "unique_job_area_km2": 126466.18413531991,
+      "verification_s": 14.56052139,
+      "workload": "fixed_grid",
+      "timing_source": "archived_reference"
+    },
+    {
+      "acceptance": {
+        "accepted_paths": 31,
+        "incumbent_reward": 90925.3735656227,
+        "mode": "exact_polygon",
+        "polygon_evaluation": {
+          "cache_hits": 4448,
+          "evaluation_s": 11.600899612000001,
+          "polygon_unions": 112646,
+          "request_evaluations": 10011
+        },
+        "proposed_paths": 120
+      },
+      "capture_count": 17604,
+      "due_deadlines": 2334,
+      "met_deadlines": 1238,
+      "met_percent": 53.04198800342759,
+      "missed_deadlines": 1096,
+      "missed_percent": 46.95801199657241,
+      "optimized_for": "area_only",
+      "optimizer": "coordinate_improvement",
+      "repeated_job_area_km2": 515934.6424214549,
+      "report": "artifacts/scheduling-solutions/worldview60-acceptance-exact_polygon-20261116/randomized_deadlines/area_only/coordinate_improvement/report.json",
+      "rewards_by_model": {
+        "area_only": {
+          "available_reward": 173341.7149435618,
+          "reward_percent": 52.454409831601716,
+          "true_reward": 90925.3735656227
+        },
+        "area_priority_c2": {
+          "available_reward": 2156648.549153164,
+          "reward_percent": 52.81322253943569,
+          "true_reward": 1138995.5976577718
+        }
+      },
+      "schedule": "artifacts/scheduling-solutions/worldview60-acceptance-exact_polygon-20261116/randomized_deadlines/area_only/coordinate_improvement/schedule.json",
+      "search_s": 12.041462551,
+      "selected_candidate": "coordinate_improvement",
+      "timing_policy": "uniform_next_deadline_5h_to_cadence_seed_20261113",
+      "true_reward": 90925.3735656227,
+      "unique_job_area_km2": 134933.5798601764,
+      "verification_s": 13.476324544,
+      "workload": "fixed_grid",
+      "timing_source": "archived_reference"
+    },
+    {
+      "acceptance": {
+        "accepted_paths": 1403,
+        "incumbent_reward": 91281.44001901707,
+        "mode": "exact_polygon",
+        "polygon_evaluation": {
+          "cache_hits": 499905,
+          "evaluation_s": 210.4497291190004,
+          "polygon_unions": 2327790,
+          "request_evaluations": 193639
+        },
+        "proposed_paths": 7320
+      },
+      "capture_count": 17469,
+      "due_deadlines": 2334,
+      "met_deadlines": 1258,
+      "met_percent": 53.898886032562125,
+      "missed_deadlines": 1076,
+      "missed_percent": 46.101113967437875,
+      "optimized_for": "area_only",
+      "optimizer": "lagrangian",
+      "repeated_job_area_km2": 509704.6966955672,
+      "report": "artifacts/scheduling-solutions/worldview60-acceptance-exact_polygon-20261116/randomized_deadlines/area_only/lagrangian/report.json",
+      "rewards_by_model": {
+        "area_only": {
+          "available_reward": 173341.7149435618,
+          "reward_percent": 52.65982285264533,
+          "true_reward": 91281.44001901707
+        },
+        "area_priority_c2": {
+          "available_reward": 2156648.549153164,
+          "reward_percent": 53.032818858376515,
+          "true_reward": 1143731.5184842027
+        }
+      },
+      "schedule": "artifacts/scheduling-solutions/worldview60-acceptance-exact_polygon-20261116/randomized_deadlines/area_only/lagrangian/schedule.json",
+      "search_s": 228.161348713,
+      "selected_candidate": "lagrangian_iteration_30",
+      "timing_policy": "uniform_next_deadline_5h_to_cadence_seed_20261113",
+      "true_reward": 91281.44001901707,
+      "unique_job_area_km2": 135070.91079033932,
+      "verification_s": 27.209026651,
+      "workload": "fixed_grid",
+      "timing_source": "archived_reference"
+    },
+    {
+      "acceptance": {
+        "accepted_paths": 0,
+        "mode": "none",
+        "proposed_paths": 0
+      },
+      "capture_count": 24427,
+      "due_deadlines": 2334,
+      "met_deadlines": 1063,
+      "met_percent": 45.54413024850043,
+      "missed_deadlines": 1271,
+      "missed_percent": 54.45586975149957,
+      "optimized_for": "area_priority_c2",
+      "optimizer": "independent_paths",
+      "repeated_job_area_km2": 766355.6522445272,
+      "report": "artifacts/scheduling-solutions/worldview60-acceptance-exact_polygon-20261116/randomized_deadlines/area_priority_c2/independent_paths/report.json",
+      "rewards_by_model": {
+        "area_only": {
+          "available_reward": 173341.7149435618,
+          "reward_percent": 46.04354785702821,
+          "true_reward": 79812.6754762323
+        },
+        "area_priority_c2": {
+          "available_reward": 2156648.549153164,
+          "reward_percent": 51.50933376146621,
+          "true_reward": 1110875.299245122
+        }
+      },
+      "schedule": "artifacts/scheduling-solutions/worldview60-acceptance-exact_polygon-20261116/randomized_deadlines/area_priority_c2/independent_paths/schedule.json",
+      "search_s": 0.04390023,
+      "selected_candidate": "independent_paths",
+      "timing_policy": "uniform_next_deadline_5h_to_cadence_seed_20261113",
+      "true_reward": 1110875.299245122,
+      "unique_job_area_km2": 117386.97867813123,
+      "verification_s": 14.914648238,
+      "workload": "fixed_grid",
+      "timing_source": "archived_reference"
+    },
+    {
+      "acceptance": {
+        "accepted_paths": 30,
+        "incumbent_reward": 1171327.9135715326,
+        "mode": "exact_polygon",
+        "polygon_evaluation": {
+          "cache_hits": 3837,
+          "evaluation_s": 13.770410722000001,
+          "polygon_unions": 117005,
+          "request_evaluations": 10799
+        },
+        "proposed_paths": 120
+      },
+      "capture_count": 17305,
+      "due_deadlines": 2334,
+      "met_deadlines": 1229,
+      "met_percent": 52.65638389031705,
+      "missed_deadlines": 1105,
+      "missed_percent": 47.34361610968295,
+      "optimized_for": "area_priority_c2",
+      "optimizer": "coordinate_improvement",
+      "repeated_job_area_km2": 475869.7712436104,
+      "report": "artifacts/scheduling-solutions/worldview60-acceptance-exact_polygon-20261116/randomized_deadlines/area_priority_c2/coordinate_improvement/report.json",
+      "rewards_by_model": {
+        "area_only": {
+          "available_reward": 173341.7149435618,
+          "reward_percent": 50.378291700922794,
+          "true_reward": 87326.59479364964
+        },
+        "area_priority_c2": {
+          "available_reward": 2156648.549153164,
+          "reward_percent": 54.31241516061899,
+          "true_reward": 1171327.9135715326
+        }
+      },
+      "schedule": "artifacts/scheduling-solutions/worldview60-acceptance-exact_polygon-20261116/randomized_deadlines/area_priority_c2/coordinate_improvement/schedule.json",
+      "search_s": 14.239341221,
+      "selected_candidate": "coordinate_improvement",
+      "timing_policy": "uniform_next_deadline_5h_to_cadence_seed_20261113",
+      "true_reward": 1171327.9135715326,
+      "unique_job_area_km2": 130746.6573159561,
+      "verification_s": 16.556646459,
+      "workload": "fixed_grid",
+      "timing_source": "archived_reference"
+    },
+    {
+      "acceptance": {
+        "accepted_paths": 1417,
+        "incumbent_reward": 1174949.4941532745,
+        "mode": "exact_polygon",
+        "polygon_evaluation": {
+          "cache_hits": 506973,
+          "evaluation_s": 285.34026894599856,
+          "polygon_unions": 2302401,
+          "request_evaluations": 195009
+        },
+        "proposed_paths": 7320
+      },
+      "capture_count": 17328,
+      "due_deadlines": 2334,
+      "met_deadlines": 1244,
+      "met_percent": 53.299057412167954,
+      "missed_deadlines": 1090,
+      "missed_percent": 46.700942587832046,
+      "optimized_for": "area_priority_c2",
+      "optimizer": "lagrangian",
+      "repeated_job_area_km2": 475931.9809259749,
+      "report": "artifacts/scheduling-solutions/worldview60-acceptance-exact_polygon-20261116/randomized_deadlines/area_priority_c2/lagrangian/report.json",
+      "rewards_by_model": {
+        "area_only": {
+          "available_reward": 173341.7149435618,
+          "reward_percent": 50.651282795151104,
+          "true_reward": 87799.80223802818
+        },
+        "area_priority_c2": {
+          "available_reward": 2156648.549153164,
+          "reward_percent": 54.48034148237243,
+          "true_reward": 1174949.4941532745
+        }
+      },
+      "schedule": "artifacts/scheduling-solutions/worldview60-acceptance-exact_polygon-20261116/randomized_deadlines/area_priority_c2/lagrangian/schedule.json",
+      "search_s": 310.30316633,
+      "selected_candidate": "lagrangian_iteration_26",
+      "timing_policy": "uniform_next_deadline_5h_to_cadence_seed_20261113",
+      "true_reward": 1174949.4941532745,
+      "unique_job_area_km2": 131280.4740750996,
+      "verification_s": 31.089236902,
+      "workload": "fixed_grid",
+      "timing_source": "archived_reference"
+    },
+    {
+      "acceptance": {
+        "accepted_paths": 0,
+        "mode": "none",
+        "proposed_paths": 0
+      },
+      "capture_count": 11038,
+      "due_deadlines": 2334,
+      "met_deadlines": 1210,
+      "met_percent": 51.84233076263924,
+      "missed_deadlines": 1124,
+      "missed_percent": 48.15766923736076,
+      "optimized_for": "area_only",
+      "optimizer": "independent_paths",
+      "repeated_job_area_km2": 966839.8168591479,
+      "report": "artifacts/scheduling-solutions/worldview60-strips-comparison-buffered-20261116/aoi_strips/area_only/independent_paths/report.json",
+      "rewards_by_model": {
+        "area_only": {
+          "available_reward": 173341.7149435618,
+          "reward_percent": 53.294604282635305,
+          "true_reward": 92381.78103590496
+        },
+        "area_priority_c2": {
+          "available_reward": 2156648.549153164,
+          "reward_percent": 54.380019748937976,
+          "true_reward": 1172785.906944675
+        }
+      },
+      "schedule": "artifacts/scheduling-solutions/worldview60-strips-comparison-buffered-20261116/aoi_strips/area_only/independent_paths/schedule.json",
+      "search_s": 0.022379677,
+      "selected_candidate": "independent_paths",
+      "timing_policy": "uniform_next_deadline_5h_to_cadence_seed_20261113",
+      "true_reward": 92381.78103590496,
+      "unique_job_area_km2": 121251.71082531255,
+      "verification_s": 5.658838301,
+      "workload": "aoi_strips",
+      "timing_source": "current_run"
+    },
+    {
+      "acceptance": {
+        "accepted_paths": 48,
+        "incumbent_reward": 118585.88648987666,
+        "mode": "exact_polygon",
+        "polygon_evaluation": {
+          "cache_hits": 3009,
+          "evaluation_s": 1.909048564999999,
+          "polygon_unions": 29412,
+          "request_evaluations": 9476
+        },
+        "proposed_paths": 120
+      },
+      "capture_count": 5747,
+      "due_deadlines": 2334,
+      "met_deadlines": 1674,
+      "met_percent": 71.72236503856041,
+      "missed_deadlines": 660,
+      "missed_percent": 28.27763496143959,
+      "optimized_for": "area_only",
+      "optimizer": "coordinate_improvement",
+      "repeated_job_area_km2": 384971.028058244,
+      "report": "artifacts/scheduling-solutions/worldview60-strips-comparison-buffered-20261116/aoi_strips/area_only/coordinate_improvement/report.json",
+      "rewards_by_model": {
+        "area_only": {
+          "available_reward": 173341.7149435618,
+          "reward_percent": 68.41162643884478,
+          "true_reward": 118585.88648987666
+        },
+        "area_priority_c2": {
+          "available_reward": 2156648.549153164,
+          "reward_percent": 67.13968647404386,
+          "true_reward": 1447967.0742484499
+        }
+      },
+      "schedule": "artifacts/scheduling-solutions/worldview60-strips-comparison-buffered-20261116/aoi_strips/area_only/coordinate_improvement/schedule.json",
+      "search_s": 1.95708105,
+      "selected_candidate": "coordinate_improvement",
+      "timing_policy": "uniform_next_deadline_5h_to_cadence_seed_20261113",
+      "true_reward": 118585.88648987666,
+      "unique_job_area_km2": 143196.35158893728,
+      "verification_s": 6.15800036,
+      "workload": "aoi_strips",
+      "timing_source": "current_run"
+    },
+    {
+      "acceptance": {
+        "accepted_paths": 1619,
+        "incumbent_reward": 121169.61573271727,
+        "mode": "exact_polygon",
+        "polygon_evaluation": {
+          "cache_hits": 405676,
+          "evaluation_s": 36.96687977000003,
+          "polygon_unions": 537577,
+          "request_evaluations": 132886
+        },
+        "proposed_paths": 7320
+      },
+      "capture_count": 5318,
+      "due_deadlines": 2334,
+      "met_deadlines": 1700,
+      "met_percent": 72.8363324764353,
+      "missed_deadlines": 634,
+      "missed_percent": 27.163667523564694,
+      "optimized_for": "area_only",
+      "optimizer": "lagrangian",
+      "repeated_job_area_km2": 317986.0907845054,
+      "report": "artifacts/scheduling-solutions/worldview60-strips-comparison-buffered-20261116/aoi_strips/area_only/lagrangian/report.json",
+      "rewards_by_model": {
+        "area_only": {
+          "available_reward": 173341.7149435618,
+          "reward_percent": 69.90216738779168,
+          "true_reward": 121169.61573271727
+        },
+        "area_priority_c2": {
+          "available_reward": 2156648.549153164,
+          "reward_percent": 68.27382431685118,
+          "true_reward": 1472426.441580751
+        }
+      },
+      "schedule": "artifacts/scheduling-solutions/worldview60-strips-comparison-buffered-20261116/aoi_strips/area_only/lagrangian/schedule.json",
+      "search_s": 40.53847658,
+      "selected_candidate": "lagrangian_iteration_27",
+      "timing_policy": "uniform_next_deadline_5h_to_cadence_seed_20261113",
+      "true_reward": 121169.61573271727,
+      "unique_job_area_km2": 143483.69764068245,
+      "verification_s": 8.154622925,
+      "workload": "aoi_strips",
+      "timing_source": "current_run"
+    },
+    {
+      "acceptance": {
+        "accepted_paths": 0,
+        "mode": "none",
+        "proposed_paths": 0
+      },
+      "capture_count": 11118,
+      "due_deadlines": 2334,
+      "met_deadlines": 1201,
+      "met_percent": 51.456726649528704,
+      "missed_deadlines": 1133,
+      "missed_percent": 48.543273350471296,
+      "optimized_for": "area_priority_c2",
+      "optimizer": "independent_paths",
+      "repeated_job_area_km2": 880738.7322024967,
+      "report": "artifacts/scheduling-solutions/worldview60-strips-comparison-buffered-20261116/aoi_strips/area_priority_c2/independent_paths/report.json",
+      "rewards_by_model": {
+        "area_only": {
+          "available_reward": 173341.7149435618,
+          "reward_percent": 49.42729934790337,
+          "true_reward": 85678.12833994364
+        },
+        "area_priority_c2": {
+          "available_reward": 2156648.549153164,
+          "reward_percent": 55.83791113087597,
+          "true_reward": 1204227.50028147
+        }
+      },
+      "schedule": "artifacts/scheduling-solutions/worldview60-strips-comparison-buffered-20261116/aoi_strips/area_priority_c2/independent_paths/schedule.json",
+      "search_s": 0.00441327,
+      "selected_candidate": "independent_paths",
+      "timing_policy": "uniform_next_deadline_5h_to_cadence_seed_20261113",
+      "true_reward": 1204227.50028147,
+      "unique_job_area_km2": 113480.51085332433,
+      "verification_s": 5.410371508,
+      "workload": "aoi_strips",
+      "timing_source": "current_run"
+    },
+    {
+      "acceptance": {
+        "accepted_paths": 51,
+        "incumbent_reward": 1457839.8011564217,
+        "mode": "exact_polygon",
+        "polygon_evaluation": {
+          "cache_hits": 2913,
+          "evaluation_s": 1.6252669930000005,
+          "polygon_unions": 27420,
+          "request_evaluations": 9524
+        },
+        "proposed_paths": 120
+      },
+      "capture_count": 5726,
+      "due_deadlines": 2334,
+      "met_deadlines": 1669,
+      "met_percent": 71.50814053127678,
+      "missed_deadlines": 665,
+      "missed_percent": 28.491859468723224,
+      "optimized_for": "area_priority_c2",
+      "optimizer": "coordinate_improvement",
+      "repeated_job_area_km2": 347090.10243834567,
+      "report": "artifacts/scheduling-solutions/worldview60-strips-comparison-buffered-20261116/aoi_strips/area_priority_c2/coordinate_improvement/report.json",
+      "rewards_by_model": {
+        "area_only": {
+          "available_reward": 173341.7149435618,
+          "reward_percent": 66.59013512036445,
+          "true_reward": 115428.48220087477
+        },
+        "area_priority_c2": {
+          "available_reward": 2156648.549153164,
+          "reward_percent": 67.59746745610737,
+          "true_reward": 1457839.8011564217
+        }
+      },
+      "schedule": "artifacts/scheduling-solutions/worldview60-strips-comparison-buffered-20261116/aoi_strips/area_priority_c2/coordinate_improvement/schedule.json",
+      "search_s": 1.6727156330000001,
+      "selected_candidate": "coordinate_improvement",
+      "timing_policy": "uniform_next_deadline_5h_to_cadence_seed_20261113",
+      "true_reward": 1457839.8011564217,
+      "unique_job_area_km2": 141033.07874393786,
+      "verification_s": 5.453364157,
+      "workload": "aoi_strips",
+      "timing_source": "current_run"
+    },
+    {
+      "acceptance": {
+        "accepted_paths": 1677,
+        "incumbent_reward": 1571357.437238911,
+        "mode": "exact_polygon",
+        "polygon_evaluation": {
+          "cache_hits": 391338,
+          "evaluation_s": 32.77876755899992,
+          "polygon_unions": 542144,
+          "request_evaluations": 135221
+        },
+        "proposed_paths": 7320
+      },
+      "capture_count": 4937,
+      "due_deadlines": 2334,
+      "met_deadlines": 1716,
+      "met_percent": 73.52185089974293,
+      "missed_deadlines": 618,
+      "missed_percent": 26.47814910025707,
+      "optimized_for": "area_priority_c2",
+      "optimizer": "lagrangian",
+      "repeated_job_area_km2": 273288.3172390354,
+      "report": "artifacts/scheduling-solutions/worldview60-strips-comparison-buffered-20261116/aoi_strips/area_priority_c2/lagrangian/report.json",
+      "rewards_by_model": {
+        "area_only": {
+          "available_reward": 173341.7149435618,
+          "reward_percent": 70.38617965322076,
+          "true_reward": 122008.61089414923
+        },
+        "area_priority_c2": {
+          "available_reward": 2156648.549153164,
+          "reward_percent": 72.86108058060385,
+          "true_reward": 1571357.437238911
+        }
+      },
+      "schedule": "artifacts/scheduling-solutions/worldview60-strips-comparison-buffered-20261116/aoi_strips/area_priority_c2/lagrangian/schedule.json",
+      "search_s": 36.187996052,
+      "selected_candidate": "lagrangian_iteration_24",
+      "timing_policy": "uniform_next_deadline_5h_to_cadence_seed_20261113",
+      "true_reward": 1571357.437238911,
+      "unique_job_area_km2": 143772.87465793898,
+      "verification_s": 8.099859648,
+      "workload": "aoi_strips",
+      "timing_source": "current_run"
+    },
+    {
+      "acceptance": {
+        "accepted_paths": 0,
+        "mode": "none",
+        "proposed_paths": 0
+      },
+      "capture_count": 10956,
+      "due_deadlines": 2334,
+      "met_deadlines": 1244,
+      "met_percent": 53.299057412167954,
+      "missed_deadlines": 1090,
+      "missed_percent": 46.700942587832046,
+      "optimized_for": "area_only",
+      "optimizer": "independent_paths",
+      "repeated_job_area_km2": 980220.1959009281,
+      "report": "artifacts/scheduling-solutions/worldview60-strips-comparison-buffered-20261116/clustered_strips/area_only/independent_paths/report.json",
+      "rewards_by_model": {
+        "area_only": {
+          "available_reward": 173341.7149435618,
+          "reward_percent": 53.550855721515354,
+          "true_reward": 92825.9716746272
+        },
+        "area_priority_c2": {
+          "available_reward": 2156648.549153164,
+          "reward_percent": 54.71808133386653,
+          "true_reward": 1180076.7072112807
+        }
+      },
+      "schedule": "artifacts/scheduling-solutions/worldview60-strips-comparison-buffered-20261116/clustered_strips/area_only/independent_paths/schedule.json",
+      "search_s": 0.008102914,
+      "selected_candidate": "independent_paths",
+      "timing_policy": "uniform_next_deadline_5h_to_cadence_seed_20261113",
+      "true_reward": 92825.9716746272,
+      "unique_job_area_km2": 121519.15501951415,
+      "verification_s": 7.831884822,
+      "workload": "clustered_strips",
+      "timing_source": "current_run"
+    },
+    {
+      "acceptance": {
+        "accepted_paths": 21,
+        "incumbent_reward": 118815.2412434304,
+        "mode": "exact_polygon",
+        "polygon_evaluation": {
+          "cache_hits": 5040,
+          "evaluation_s": 0.8284673590000001,
+          "polygon_unions": 15750,
+          "request_evaluations": 6439
+        },
+        "proposed_paths": 120
+      },
+      "capture_count": 5684,
+      "due_deadlines": 2334,
+      "met_deadlines": 1689,
+      "met_percent": 72.3650385604113,
+      "missed_deadlines": 645,
+      "missed_percent": 27.63496143958869,
+      "optimized_for": "area_only",
+      "optimizer": "coordinate_improvement",
+      "repeated_job_area_km2": 382755.05981030245,
+      "report": "artifacts/scheduling-solutions/worldview60-strips-comparison-buffered-20261116/clustered_strips/area_only/coordinate_improvement/report.json",
+      "rewards_by_model": {
+        "area_only": {
+          "available_reward": 173341.7149435618,
+          "reward_percent": 68.54394009088658,
+          "true_reward": 118815.2412434304
+        },
+        "area_priority_c2": {
+          "available_reward": 2156648.549153164,
+          "reward_percent": 67.21286190831493,
+          "true_reward": 1449545.2111899937
+        }
+      },
+      "schedule": "artifacts/scheduling-solutions/worldview60-strips-comparison-buffered-20261116/clustered_strips/area_only/coordinate_improvement/schedule.json",
+      "search_s": 1.322684925,
+      "selected_candidate": "coordinate_improvement",
+      "timing_policy": "uniform_next_deadline_5h_to_cadence_seed_20261113",
+      "true_reward": 118815.2412434304,
+      "unique_job_area_km2": 143254.8062232445,
+      "verification_s": 8.499694466,
+      "workload": "clustered_strips",
+      "timing_source": "current_run"
+    },
+    {
+      "acceptance": {
+        "accepted_paths": 1663,
+        "incumbent_reward": 122898.75501885932,
+        "mode": "exact_polygon",
+        "polygon_evaluation": {
+          "cache_hits": 395878,
+          "evaluation_s": 35.07346868100001,
+          "polygon_unions": 582365,
+          "request_evaluations": 147683
+        },
+        "proposed_paths": 7320
+      },
+      "capture_count": 5182,
+      "due_deadlines": 2334,
+      "met_deadlines": 1708,
+      "met_percent": 73.17909168808912,
+      "missed_deadlines": 626,
+      "missed_percent": 26.820908311910884,
+      "optimized_for": "area_only",
+      "optimizer": "lagrangian",
+      "repeated_job_area_km2": 272918.7028209721,
+      "report": "artifacts/scheduling-solutions/worldview60-strips-comparison-buffered-20261116/clustered_strips/area_only/lagrangian/report.json",
+      "rewards_by_model": {
+        "area_only": {
+          "available_reward": 173341.7149435618,
+          "reward_percent": 70.89969950907307,
+          "true_reward": 122898.75501885932
+        },
+        "area_priority_c2": {
+          "available_reward": 2156648.549153164,
+          "reward_percent": 70.0355199435999,
+          "true_reward": 1510420.024755522
+        }
+      },
+      "schedule": "artifacts/scheduling-solutions/worldview60-strips-comparison-buffered-20261116/clustered_strips/area_only/lagrangian/schedule.json",
+      "search_s": 40.853699699,
+      "selected_candidate": "lagrangian_iteration_28",
+      "timing_policy": "uniform_next_deadline_5h_to_cadence_seed_20261113",
+      "true_reward": 122898.75501885932,
+      "unique_job_area_km2": 143897.13214756455,
+      "verification_s": 10.087587659,
+      "workload": "clustered_strips",
+      "timing_source": "current_run"
+    },
+    {
+      "acceptance": {
+        "accepted_paths": 0,
+        "mode": "none",
+        "proposed_paths": 0
+      },
+      "capture_count": 10988,
+      "due_deadlines": 2334,
+      "met_deadlines": 1241,
+      "met_percent": 53.17052270779777,
+      "missed_deadlines": 1093,
+      "missed_percent": 46.82947729220223,
+      "optimized_for": "area_priority_c2",
+      "optimizer": "independent_paths",
+      "repeated_job_area_km2": 889712.8773218838,
+      "report": "artifacts/scheduling-solutions/worldview60-strips-comparison-buffered-20261116/clustered_strips/area_priority_c2/independent_paths/report.json",
+      "rewards_by_model": {
+        "area_only": {
+          "available_reward": 173341.7149435618,
+          "reward_percent": 50.54169870779247,
+          "true_reward": 87609.84730169548
+        },
+        "area_priority_c2": {
+          "available_reward": 2156648.549153164,
+          "reward_percent": 57.012443362932125,
+          "true_reward": 1229558.0326234451
+        }
+      },
+      "schedule": "artifacts/scheduling-solutions/worldview60-strips-comparison-buffered-20261116/clustered_strips/area_priority_c2/independent_paths/schedule.json",
+      "search_s": 0.007876335,
+      "selected_candidate": "independent_paths",
+      "timing_policy": "uniform_next_deadline_5h_to_cadence_seed_20261113",
+      "true_reward": 1229558.0326234451,
+      "unique_job_area_km2": 116334.11155201358,
+      "verification_s": 7.532978503,
+      "workload": "clustered_strips",
+      "timing_source": "current_run"
+    },
+    {
+      "acceptance": {
+        "accepted_paths": 14,
+        "incumbent_reward": 1463972.7643344402,
+        "mode": "exact_polygon",
+        "polygon_evaluation": {
+          "cache_hits": 5047,
+          "evaluation_s": 0.7126393160000003,
+          "polygon_unions": 14108,
+          "request_evaluations": 6262
+        },
+        "proposed_paths": 120
+      },
+      "capture_count": 5714,
+      "due_deadlines": 2334,
+      "met_deadlines": 1683,
+      "met_percent": 72.10796915167096,
+      "missed_deadlines": 651,
+      "missed_percent": 27.89203084832905,
+      "optimized_for": "area_priority_c2",
+      "optimizer": "coordinate_improvement",
+      "repeated_job_area_km2": 348887.0853893075,
+      "report": "artifacts/scheduling-solutions/worldview60-strips-comparison-buffered-20261116/clustered_strips/area_priority_c2/coordinate_improvement/report.json",
+      "rewards_by_model": {
+        "area_only": {
+          "available_reward": 173341.7149435618,
+          "reward_percent": 67.00014238080482,
+          "true_reward": 116139.19581751521
+        },
+        "area_priority_c2": {
+          "available_reward": 2156648.549153164,
+          "reward_percent": 67.88184217170146,
+          "true_reward": 1463972.7643344402
+        }
+      },
+      "schedule": "artifacts/scheduling-solutions/worldview60-strips-comparison-buffered-20261116/clustered_strips/area_priority_c2/coordinate_improvement/schedule.json",
+      "search_s": 1.142960891,
+      "selected_candidate": "coordinate_improvement",
+      "timing_policy": "uniform_next_deadline_5h_to_cadence_seed_20261113",
+      "true_reward": 1463972.7643344402,
+      "unique_job_area_km2": 141196.3848008701,
+      "verification_s": 8.2386842,
+      "workload": "clustered_strips",
+      "timing_source": "current_run"
+    },
+    {
+      "acceptance": {
+        "accepted_paths": 1628,
+        "incumbent_reward": 1575783.2856866065,
+        "mode": "exact_polygon",
+        "polygon_evaluation": {
+          "cache_hits": 382130,
+          "evaluation_s": 36.06368325999994,
+          "polygon_unions": 580757,
+          "request_evaluations": 148543
+        },
+        "proposed_paths": 7320
+      },
+      "capture_count": 4926,
+      "due_deadlines": 2334,
+      "met_deadlines": 1727,
+      "met_percent": 73.99314481576693,
+      "missed_deadlines": 607,
+      "missed_percent": 26.006855184233075,
+      "optimized_for": "area_priority_c2",
+      "optimizer": "lagrangian",
+      "repeated_job_area_km2": 276554.0141381614,
+      "report": "artifacts/scheduling-solutions/worldview60-strips-comparison-buffered-20261116/clustered_strips/area_priority_c2/lagrangian/report.json",
+      "rewards_by_model": {
+        "area_only": {
+          "available_reward": 173341.7149435618,
+          "reward_percent": 70.60714722346177,
+          "true_reward": 122391.6398698741
+        },
+        "area_priority_c2": {
+          "available_reward": 2156648.549153164,
+          "reward_percent": 73.06629938871394,
+          "true_reward": 1575783.2856866065
+        }
+      },
+      "schedule": "artifacts/scheduling-solutions/worldview60-strips-comparison-buffered-20261116/clustered_strips/area_priority_c2/lagrangian/schedule.json",
+      "search_s": 42.42998664,
+      "selected_candidate": "lagrangian_iteration_20",
+      "timing_policy": "uniform_next_deadline_5h_to_cadence_seed_20261113",
+      "true_reward": 1575783.2856866065,
+      "unique_job_area_km2": 143900.07373015722,
+      "verification_s": 8.849733395,
+      "workload": "clustered_strips",
+      "timing_source": "current_run"
+    }
+  ],
+  "improvements": [
+    {
+      "reward_model": "area_only",
+      "optimizer": "independent_paths",
+      "base_over_fixed_grid_reward_percent": 8.084023425650644,
+      "clustered_over_base_reward_percent": 0.4808206052550501,
+      "clustered_over_fixed_grid_reward_percent": 8.603713681269888,
+      "base_extra_met_deadlines": 161,
+      "clustering_extra_met_deadlines": 34
+    },
+    {
+      "reward_model": "area_only",
+      "optimizer": "coordinate_improvement",
+      "base_over_fixed_grid_reward_percent": 30.421115514351783,
+      "clustered_over_base_reward_percent": 0.1934081367881202,
+      "clustered_over_fixed_grid_reward_percent": 30.67336056384635,
+      "base_extra_met_deadlines": 436,
+      "clustering_extra_met_deadlines": 15
+    },
+    {
+      "reward_model": "area_only",
+      "optimizer": "lagrangian",
+      "base_over_fixed_grid_reward_percent": 32.742883665587954,
+      "clustered_over_base_reward_percent": 1.4270403315929325,
+      "clustered_over_fixed_grid_reward_percent": 34.63717815281537,
+      "base_extra_met_deadlines": 442,
+      "clustering_extra_met_deadlines": 8
+    },
+    {
+      "reward_model": "area_priority_c2",
+      "optimizer": "independent_paths",
+      "base_over_fixed_grid_reward_percent": 8.403481569874138,
+      "clustered_over_base_reward_percent": 2.1034673544703564,
+      "clustered_over_fixed_grid_reward_percent": 10.683713415805741,
+      "base_extra_met_deadlines": 138,
+      "clustering_extra_met_deadlines": 40
+    },
+    {
+      "reward_model": "area_priority_c2",
+      "optimizer": "coordinate_improvement",
+      "base_over_fixed_grid_reward_percent": 24.46043368942492,
+      "clustered_over_base_reward_percent": 0.42068841673505997,
+      "clustered_over_fixed_grid_reward_percent": 24.98402431737454,
+      "base_extra_met_deadlines": 440,
+      "clustering_extra_met_deadlines": 14
+    },
+    {
+      "reward_model": "area_priority_c2",
+      "optimizer": "lagrangian",
+      "base_over_fixed_grid_reward_percent": 33.738296416843625,
+      "clustered_over_base_reward_percent": 0.28165765107348584,
+      "clustered_over_fixed_grid_reward_percent": 34.114980561116994,
+      "base_extra_met_deadlines": 472,
+      "clustering_extra_met_deadlines": 11
+    }
+  ],
+  "validation": {
+    "all_paths_and_maneuvers": "passed",
+    "coverage": "polygon_union",
+    "refined_incumbents_equal_matching_base_rewards": true,
+    "all_88728_base_actions_preserved": "Physical timing, offsets and decoded job crops compared across all 60 satellite archives.",
+    "reward_and_capture_results_reproduced_after_io_buffering": true,
+    "pilot_comparison": "artifacts/scheduling-solutions/worldview60-strips-comparison-20261116/comparison.json",
+    "tests": "Capture crate: 89 passed, 3 ignored; CLI: 1 passed. Native playback: 9 passed, 1 ignored. Native cargo check passed."
+  },
+  "limitations": [
+    "AOI projection, left/right layouts and bounded local pair refinement are candidate heuristics; continuous pointing and global optimality are not claimed.",
+    "Physical feasibility uses the existing spherical footprint and calibrated quaternion-rate slew model with two-second settling.",
+    "Coordinated refinement is warm-started with its matching base result; the independent-path run has no incumbent seed.",
+    "The fixed-grid candidate set differs from the full-strip candidate sets. It is compared by independently verified reward, not assumed to be preserved.",
+    "Refinement gains include a further optimization pass seeded with the base plan; this comparison does not isolate additional candidates from continued search."
+  ],
+  "portable_replay": {
+    "path": "artifacts/scheduling-solutions/worldview60-strips-comparison-buffered-20261116/best-c2-replay.json.gz",
+    "schema_version": 2,
+    "compressed_bytes": 26097976,
+    "verified_due_deadlines": 2334,
+    "met_deadlines": 1727,
+    "missed_deadlines": 607,
+    "missed_with_partial_coverage": 189
+  }
+}

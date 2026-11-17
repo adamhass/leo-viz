@@ -1,0 +1,7 @@
+{
+  "preset": "../../../artifacts/job-design/worldview60-overlap-demand-matched-20261116/preset.json.gz",
+  "output": "../../../artifacts/job-design/worldview60-grouped-aligned-all-windows-24h-20261117",
+  "context": { "horizon_s": 86400, "due_only": false },
+  "policy": {},
+  "workers": 8
+}

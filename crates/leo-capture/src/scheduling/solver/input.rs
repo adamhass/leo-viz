@@ -70,6 +70,7 @@ struct Node {
     maneuver_to: Vec<u32>,
     maneuver_hub: Option<usize>,
     hub: Option<usize>,
+    next_hub: Option<usize>,
     #[serde(default)]
     targets: Vec<u32>,
 }
@@ -110,9 +111,10 @@ pub(super) fn job_scope(jobs: &[Job], cadence_hours: Option<f64>) -> Result<Vec<
 
 pub(super) fn load(config: &Config) -> Result<Model> {
     let root = &config.graph_directory;
-    let manifest: super::super::Summary =
-        serde_json::from_reader(File::open(root.join("manifest.json")).map_err(|e| e.to_string())?)
-            .map_err(|e| e.to_string())?;
+    let manifest: super::super::Summary = serde_json::from_reader(BufReader::new(
+        File::open(root.join("manifest.json")).map_err(|e| e.to_string())?,
+    ))
+    .map_err(|e| e.to_string())?;
     if manifest.status != "complete" || root.join("INCOMPLETE").exists() {
         return Err("Graph generation is incomplete".into());
     }
@@ -158,9 +160,10 @@ pub(super) fn load(config: &Config) -> Result<Model> {
         .collect();
     let atlas = Atlas::new(&jobs, &regions, options.cell_deg, options.edge_km, |_| true)?;
     drop(regions);
-    let saved_charts: Vec<serde_json::Value> =
-        serde_json::from_reader(File::open(root.join("charts.json")).map_err(|e| e.to_string())?)
-            .map_err(|e| e.to_string())?;
+    let saved_charts: Vec<serde_json::Value> = serde_json::from_reader(BufReader::new(
+        File::open(root.join("charts.json")).map_err(|e| e.to_string())?,
+    ))
+    .map_err(|e| e.to_string())?;
     if saved_charts.len() != atlas.patches.len() {
         return Err("Rebuilt chart count differs from graph export".into());
     }
@@ -183,6 +186,7 @@ pub(super) fn load(config: &Config) -> Result<Model> {
     );
     let mut samples = Samples::new();
     let mut counts = vec![0usize; jobs.len()];
+    let mut areas_by_job = vec![Vec::new(); jobs.len()];
     for (patch_id, patch) in atlas.patches.iter().enumerate() {
         for piece in &patch.pieces {
             if slots[piece.job] == 0 {
@@ -213,6 +217,7 @@ pub(super) fn load(config: &Config) -> Result<Model> {
                         if polygon.unsigned_area() > 1e-12 {
                             if let Some(point) = polygon.interior_point() {
                                 points.push((point, counts[piece.job]));
+                                areas_by_job[piece.job].push(polygon.unsigned_area());
                                 counts[piece.job] += 1;
                             }
                         }
@@ -249,6 +254,14 @@ pub(super) fn load(config: &Config) -> Result<Model> {
         return Err("A due job has no valid coverage witnesses".into());
     }
     let (requests, point_request) = request_index(&demands);
+    let point_areas = demands
+        .iter()
+        .enumerate()
+        .flat_map(|(job, d)| {
+            let areas = &areas_by_job[job];
+            (0..d.slots).flat_map(move |_| areas.iter().copied())
+        })
+        .collect();
     let ticks = (config.horizon_s / options.step_s).round() as u32;
     let mut last = 0;
     let graphs = parallel::map(
@@ -278,6 +291,7 @@ pub(super) fn load(config: &Config) -> Result<Model> {
         demands,
         requests,
         point_request,
+        point_areas,
         graphs,
         atlas,
         manifest,
@@ -426,6 +440,12 @@ fn load_graph(
                 || std::mem::replace(&mut seen_hub[hub - old_base], true)
             {
                 return Err("Invalid hub record".into());
+            }
+            if let Some(next) = r.next_hub {
+                if !(old_base..h.nodes).contains(&next) {
+                    return Err("Invalid next waiting hub".into());
+                }
+                edges[2 * n + 2 + hub - old_base].push((2 * n + 2 + next - old_base) as u32);
             }
             for to in r.targets {
                 if to as usize >= h.action_count {

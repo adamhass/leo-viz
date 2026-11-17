@@ -1,18 +1,26 @@
 //! Solve precomputed acquisition graphs without regenerating orbital geometry.
-use leo_capture::scheduling::solver::{diagnose, solve, solve_baseline, Config};
+use leo_capture::scheduling::solver::{diagnose, postprocess_saved, solve, solve_baseline, Config};
 fn main() {
     let run = || -> Result<(), Box<dyn std::error::Error>> {
         let args: Vec<_> = std::env::args_os().collect();
         let diagnostic = args.len() == 5 && args[1] == "--diagnose";
         let baseline = args.len() == 3 && args[1] == "--baseline";
-        if args.len() != 2 && !diagnostic && !baseline {
-            return Err("Usage: leo-schedule CONFIG.json | leo-schedule --baseline CONFIG.json | leo-schedule --diagnose CONFIG.json SCHEDULE.json OUTPUT.json".into());
+        let postprocess = args.len() == 4 && args[1] == "--postprocess";
+        if args.len() != 2 && !diagnostic && !baseline && !postprocess {
+            return Err("Usage: leo-schedule CONFIG.json | leo-schedule --baseline CONFIG.json | leo-schedule --postprocess CONFIG.json SCHEDULE.json | leo-schedule --diagnose CONFIG.json SCHEDULE.json OUTPUT.json".into());
         }
-        let path = std::fs::canonicalize(&args[if diagnostic || baseline { 2 } else { 1 }])?;
+        let path = std::fs::canonicalize(
+            &args[if diagnostic || baseline || postprocess {
+                2
+            } else {
+                1
+            }],
+        )?;
         let mut config: Config = serde_json::from_reader(std::fs::File::open(&path)?)?;
         let base = path.parent().unwrap();
         config.graph_directory = base.join(config.graph_directory);
         config.output = base.join(config.output);
+        config.incumbent_schedule = config.incumbent_schedule.map(|p| base.join(p));
         if diagnostic {
             use std::io::Write;
             let output = std::path::Path::new(&args[4]);
@@ -30,7 +38,9 @@ fn main() {
             println!("Diagnostic report: {}", output.display());
             return Ok(());
         }
-        let result = if baseline {
+        let result = if postprocess {
+            postprocess_saved(&config, &std::fs::canonicalize(&args[3])?)?
+        } else if baseline {
             solve_baseline(&config)?
         } else {
             solve(&config)?

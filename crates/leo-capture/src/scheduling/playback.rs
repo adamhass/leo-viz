@@ -13,7 +13,7 @@ use leo_sim::{
     orbit::WalkerShell,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 type Result<T> = std::result::Result<T, String>;
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -63,6 +63,10 @@ pub struct DeadlineOutcome {
     pub deadline_s: f64,
     pub coverage_fraction: f64,
     pub complete: bool,
+    /// Seconds since the replay epoch: first crop-end event whose polygon union
+    /// meets the verifier's full-coverage threshold. Absent in legacy exports.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub completed_at_s: Option<f64>,
 }
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Assessment {
@@ -94,7 +98,7 @@ pub struct Pointing {
 impl Replay {
     pub fn new(document: Document) -> Result<Self> {
         document.options.validate()?;
-        if document.schema_version != 1
+        if !matches!(document.schema_version, 1 | 2)
             || !document.epoch_unix_s.is_finite()
             || !document.horizon_s.is_finite()
             || document.horizon_s <= 0.0
@@ -110,17 +114,32 @@ impl Replay {
             return Err("Replay requires the saved WorldView-60 design constellation".into());
         }
         let expected = document.options.modes();
-        if expected.len() != document.modes.len()
-            || expected.iter().zip(&document.modes).any(|(a, b)| {
-                a.along_km != b.along_km
-                    || a.cross_km != b.cross_km
-                    || a.attitude
-                        .iter()
-                        .zip(b.attitude)
-                        .any(|(x, y)| !y.is_finite() || (x - y).abs() > 1e-12)
-            })
+        if document.schema_version == 1
+            && (expected.len() != document.modes.len()
+                || expected.iter().zip(&document.modes).any(|(a, b)| {
+                    a.along_km != b.along_km
+                        || a.cross_km != b.cross_km
+                        || a.attitude
+                            .iter()
+                            .zip(b.attitude)
+                            .any(|(x, y)| !y.is_finite() || (x - y).abs() > 1e-12)
+                }))
         {
             return Err("Replay pointing modes disagree with its observation model".into());
+        }
+        for mode in &document.modes {
+            if !mode.along_km.is_finite()
+                || !mode.cross_km.is_finite()
+                || mode.along_km.hypot(mode.cross_km)
+                    > (document.options.reach_km - document.options.width_km) / 2.0 + 1e-8
+                || Mode::new(mode.along_km, mode.cross_km)
+                    .attitude
+                    .iter()
+                    .zip(mode.attitude)
+                    .any(|(a, b)| !b.is_finite() || (a - b).abs() > 1e-12)
+            {
+                return Err("Invalid replay pointing geometry".into());
+            }
         }
         let workload: crate::storage::Document =
             crate::storage::Document::deserialize(&document.preset["workload"])
@@ -131,6 +150,7 @@ impl Replay {
         let mut ends = Vec::new();
         let mut starts = Vec::new();
         let mut ids = BTreeSet::new();
+        let mut request_crop_ends: BTreeMap<(usize, u64), Vec<f64>> = BTreeMap::new();
         for sat in &document.satellites {
             if sat.satellite >= 60 || !ids.insert(sat.satellite) {
                 return Err("Invalid or duplicate replay satellite".into());
@@ -150,8 +170,9 @@ impl Replay {
                     || c.end_s > document.horizon_s
                     || c.start_s + 1e-8 < end + previous.transition_s(mode, &document.options)
                     || !actions.insert(c.action)
-                    || (c.start_s - c.tick as f64 * document.options.step_s).abs() > 1e-8
-                    || (c.end_s - c.start_s - document.options.step_s).abs() > 1e-8
+                    || document.schema_version == 1
+                        && ((c.start_s - c.tick as f64 * document.options.step_s).abs() > 1e-8
+                            || (c.end_s - c.start_s - document.options.step_s).abs() > 1e-8)
                     || c.crops.is_empty()
                 {
                     return Err(format!(
@@ -178,6 +199,10 @@ impl Replay {
                             "Replay crop lies outside its capture or collection window".into()
                         );
                     }
+                    request_crop_ends
+                        .entry((crop.job, crop.slot))
+                        .or_default()
+                        .push(crop.end_s);
                     scheduled_jobs[crop.job] = true;
                     first_capture_end_s[crop.job] = first_capture_end_s[crop.job].min(crop.end_s);
                 }
@@ -224,6 +249,16 @@ impl Replay {
                     || !r.coverage_fraction.is_finite()
                     || !(0.0..=1.0).contains(&r.coverage_fraction)
                     || r.complete != (r.coverage_fraction >= 1.0 - 1e-6)
+                    || r.completed_at_s.is_some_and(|time| {
+                        !r.complete
+                            || !time.is_finite()
+                            || time < 0.0
+                            || time > document.horizon_s
+                            || time > deadline + 1e-6
+                            || request_crop_ends.get(&(r.job, r.slot)).is_none_or(|ends| {
+                                !ends.iter().any(|end| (end - time).abs() <= 1e-6)
+                            })
+                    })
                 {
                     return Err("Invalid or duplicate deadline assessment".into());
                 }

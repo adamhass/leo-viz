@@ -9,8 +9,19 @@ maneuver choices from a saved AOI/jobs preset and WorldView-60. The
 [experimental solver](SCHEDULING-SOLVER.md) selects satellite paths and verifies
 deadline coverage. [Job design](JOB-DESIGN.md) documents the constellation-based
 reservation policy, mosaic timing and randomized ongoing deadlines.
+Optional [cadence alignment](CADENCE-ALIGNMENT.md) groups overlapping jobs onto
+the same delivery days before graph construction while preserving recurrence
+periods and deadline counts.
+Optional [shared-AOI grouping](JOB-GROUPING.md) enriches the capture inputs with
+polygon unions before strip construction, bounded by estimated strip count and
+the members' common observation window. Original jobs retain their own rewards.
 [Portable replay](../../docs/schedule-playback.md) packages selected actions,
 AOIs/jobs and assessed deadlines for the native visualizer.
+The [comparison workflow](SCHEDULING-EXPERIMENTS.md) evaluates independent,
+coordinated and Lagrangian paths under the same area/priority reward models,
+with true polygon reward reported separately from Met % and search scores.
+Optional [postprocessing](POSTPROCESSING.md) prunes redundant captures and fills
+feasible gaps using missed deadlines. It also works directly on a saved schedule.
 
 ```sh
 cargo test --manifest-path crates/leo-capture/Cargo.toml

@@ -1,0 +1,19 @@
+{
+  "acceptance": "exact_polygon",
+  "graph_directory": "../../../artifacts/scheduling-graphs/worldview60-overlap-demand-matched-24h-20261116",
+  "horizon_s": 86400.0,
+  "incumbent_schedule": null,
+  "iterations": 30,
+  "iterations_per_priority": 12,
+  "job_cadence_hours": null,
+  "optimizer": "coordinate_improvement",
+  "output": "../../../artifacts/scheduling-solutions/worldview60-unique-paths-postprocessed-20261117",
+  "repair_sweeps": 2,
+  "reward": {
+    "priority_base": 2.0
+  },
+  "samples_per_axis": 3,
+  "workers": 4,
+  "replacement_path_labels": 4,
+  "postprocess": {}
+}

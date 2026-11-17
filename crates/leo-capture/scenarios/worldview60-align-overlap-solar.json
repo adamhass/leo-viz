@@ -1,0 +1,12 @@
+{
+  "preset": "../../../artifacts/job-design/worldview60-ongoing-20261113/preset.json.gz",
+  "output": "../../../artifacts/job-design/worldview60-overlap-solar-20261116",
+  "policy": {
+    "method": "overlap_balanced",
+    "seed": 20261113,
+    "priority_base": 2.0,
+    "within_day_order": "solar_window",
+    "daily_load_target": "per_job",
+    "local_balance_weight": 1.0
+  }
+}

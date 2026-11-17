@@ -6,11 +6,32 @@ impl Panel {
         #[cfg(not(target_arch = "wasm32"))]
         {
             ui.label("Saved schedule replay");
-            ui.add(
-                egui::TextEdit::singleline(&mut self.path)
-                    .hint_text("playback.json.gz")
-                    .desired_width(f32::INFINITY),
-            );
+            ui.add_enabled_ui(self.pending.is_none(), |ui| {
+                let label = self
+                    .schedules
+                    .iter()
+                    .find(|s| s.path == self.path)
+                    .map_or("No saved schedules", |s| s.label.as_str());
+                egui::ComboBox::from_id_salt("schedule_picker")
+                    .selected_text(label)
+                    .width(ui.available_width())
+                    .show_ui(ui, |ui| {
+                        for schedule in &self.schedules {
+                            ui.selectable_value(
+                                &mut self.path,
+                                schedule.path.clone(),
+                                &schedule.label,
+                            )
+                            .on_hover_text(&schedule.path);
+                        }
+                    });
+                if ui.small_button("Refresh schedules").clicked() {
+                    self.schedules = super::catalog::discover(
+                        std::path::Path::new(env!("CARGO_MANIFEST_DIR")),
+                        Some(&self.path),
+                    );
+                }
+            });
             if ui
                 .add_enabled(self.pending.is_none(), egui::Button::new("Load schedule"))
                 .clicked()
@@ -159,12 +180,7 @@ impl Panel {
         ));
         ui.label(format!(
             "{touched} / {scheduled} planned AOIs touched · {} inactive AOIs",
-            replay
-                .scheduled_jobs
-                .iter()
-                .zip(&replay.missed_jobs)
-                .filter(|(selected, missed)| !**selected && !**missed)
-                .count()
+            scene.job_colors.due.iter().filter(|&&due| !due).count()
         ));
         if let Some(assessment) = &replay.document.assessment {
             let due = assessment.requests.len();
@@ -185,14 +201,34 @@ impl Panel {
                 egui::Color32::from_rgb(MISSED_COLOR[0], MISSED_COLOR[1], MISSED_COLOR[2]),
                 format!("{missed} / {due} due deadlines missed by this plan ({rate:.1}%)"),
             );
-            ui.small("Red: missed deadline in this plan, including partial coverage. Later deadlines are not failures.");
+            ui.small("Red/orange: missed deadline in this plan, including partial coverage. Later deadlines are not failures.");
         } else {
-            ui.colored_label(egui::Color32::YELLOW, "This older replay has no per-job deadline results. Re-export it to show missed deadlines in red.");
+            ui.colored_label(egui::Color32::YELLOW, "This older replay has no per-job deadline results. Re-export it to show missed deadlines and verified completion colors.");
         }
-        ui.colored_label(
-            egui::Color32::from_rgb(ACTIVE_COLOR[0], ACTIVE_COLOR[1], ACTIVE_COLOR[2]),
-            "Teal: selected coverage · gray: inactive",
-        );
+        for (color, label) in [
+            (
+                CAPTURED_COLOR,
+                "White: fully captured for all deadlines in this replay",
+            ),
+            (
+                INACTIVE_COLOR,
+                "Gray: no deadline in this scheduling horizon",
+            ),
+            (MISSED_COLOR, "Red: deadline missed by this plan"),
+            (
+                MISSED_UNAVAILABLE_COLOR,
+                "Orange: missed deadline, outside its solar/daylight requirements now",
+            ),
+            (
+                UNAVAILABLE_COLOR,
+                "Yellow: planned, outside its solar/daylight requirements now",
+            ),
+            (DAILY_COLOR, "Blue: daily or faster (cadence ≤ 24 hours)"),
+            (ACTIVE_COLOR, "Green: other active jobs"),
+        ] {
+            ui.colored_label(egui::Color32::from_rgb(color[0], color[1], color[2]), label);
+        }
+        ui.small("White marks verified completion and takes precedence over solar colors. New exports use completion timestamps; older files wait for the last selected crop. Gray stays inactive. Missed deadlines alternate red/orange; planned jobs alternate blue/green and yellow as the clock moves. Solar eligibility is checked at the AOI anchor, independent of satellite reach.");
         ui.colored_label(
             egui::Color32::LIGHT_GREEN,
             "Green: capture sweep and recent 15-minute trail",
@@ -202,6 +238,6 @@ impl Panel {
             "Dashed cyan: observation reach (available access)",
         );
         ui.small("Sensor fan: amber while repointing/settling · gray while idle · green while capturing.");
-        ui.small("One-second sweeps follow the saved plan. Trails persist across playback steps and fade with simulation time. Red is the final planning result, not an execution failure; jobs continue after missed deadlines.");
+        ui.small("Sweeps follow the saved capture intervals. Trails persist across playback steps and fade with simulation time. Red/orange indicate the final planning result, not an execution failure; jobs continue after missed deadlines.");
     }
 }

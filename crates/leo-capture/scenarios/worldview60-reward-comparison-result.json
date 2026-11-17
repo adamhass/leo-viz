@@ -1,0 +1,244 @@
+{
+  "schema_version": 1,
+  "status": "complete",
+  "config": "crates/leo-capture/scenarios/worldview60-reward-comparison-24h.json",
+  "comparison": "artifacts/scheduling-solutions/worldview60-reward-comparison-20261116/comparison.json",
+  "graph_directory": "artifacts/scheduling-graphs/worldview60-ongoing-24h-20261113",
+  "workload": {
+    "epoch_unix_s": 1794528000.0,
+    "horizon_s": 86400.0,
+    "id": "randomized_deadlines",
+    "job_reward_modes": {
+      "complete_observation": 26523,
+      "unique_area": 26477
+    },
+    "jobs": 53000,
+    "manifest_hash_fnv1a64": 6638968699434670051,
+    "prepared_once_s": 20.402131662,
+    "preset_hash_fnv1a64": 12630355598160897441,
+    "priorities": {
+      "1": 10580,
+      "2": 10552,
+      "3": 10467,
+      "4": 10681,
+      "5": 10720
+    },
+    "timing_policy": "uniform_next_deadline_5h_to_cadence_seed_20261113"
+  },
+  "reward_models": {
+    "area_only": {
+      "priority_base": 1.0
+    },
+    "area_priority_c2": {
+      "priority_base": 2.0
+    }
+  },
+  "optimizer_settings": {
+    "horizon_s": 86400.0,
+    "iterations": 30,
+    "samples_per_axis": 3,
+    "repair_sweeps": 2,
+    "workers": 4
+  },
+  "results": [
+    {
+      "capture_count": 25121,
+      "due_deadlines": 2334,
+      "met_deadlines": 1049,
+      "met_percent": 44.94430162810625,
+      "missed_deadlines": 1285,
+      "missed_percent": 55.05569837189375,
+      "optimized_for": "area_only",
+      "optimizer": "independent_paths",
+      "repeated_job_area_km2": 838178.2401138435,
+      "report": "randomized_deadlines/area_only/independent_paths/report.json",
+      "rewards_by_model": {
+        "area_only": {
+          "available_reward": 173341.7149435618,
+          "reward_percent": 49.30849407109262,
+          "true_reward": 85472.18923567643
+        },
+        "area_priority_c2": {
+          "available_reward": 2156648.549153164,
+          "reward_percent": 49.768068298455134,
+          "true_reward": 1073322.3229001884
+        }
+      },
+      "schedule": "randomized_deadlines/area_only/independent_paths/schedule.json",
+      "search_s": 0.047749347,
+      "selected_candidate": "independent_paths",
+      "timing_policy": "uniform_next_deadline_5h_to_cadence_seed_20261113",
+      "true_reward": 85472.18923567643,
+      "unique_job_area_km2": 126466.18413531991,
+      "verification_s": 15.812596059,
+      "workload": "randomized_deadlines"
+    },
+    {
+      "capture_count": 25121,
+      "due_deadlines": 2334,
+      "met_deadlines": 1049,
+      "met_percent": 44.94430162810625,
+      "missed_deadlines": 1285,
+      "missed_percent": 55.05569837189375,
+      "optimized_for": "area_only",
+      "optimizer": "coordinate_improvement",
+      "repeated_job_area_km2": 838178.2401138435,
+      "report": "randomized_deadlines/area_only/coordinate_improvement/report.json",
+      "rewards_by_model": {
+        "area_only": {
+          "available_reward": 173341.7149435618,
+          "reward_percent": 49.30849407109262,
+          "true_reward": 85472.18923567643
+        },
+        "area_priority_c2": {
+          "available_reward": 2156648.549153164,
+          "reward_percent": 49.768068298455134,
+          "true_reward": 1073322.3229001884
+        }
+      },
+      "schedule": "randomized_deadlines/area_only/coordinate_improvement/schedule.json",
+      "search_s": 0.381295719,
+      "selected_candidate": "independent_paths",
+      "timing_policy": "uniform_next_deadline_5h_to_cadence_seed_20261113",
+      "true_reward": 85472.18923567643,
+      "unique_job_area_km2": 126466.18413531991,
+      "verification_s": 14.817469781,
+      "workload": "randomized_deadlines"
+    },
+    {
+      "capture_count": 25121,
+      "due_deadlines": 2334,
+      "met_deadlines": 1049,
+      "met_percent": 44.94430162810625,
+      "missed_deadlines": 1285,
+      "missed_percent": 55.05569837189375,
+      "optimized_for": "area_only",
+      "optimizer": "lagrangian",
+      "repeated_job_area_km2": 838178.2401138435,
+      "report": "randomized_deadlines/area_only/lagrangian/report.json",
+      "rewards_by_model": {
+        "area_only": {
+          "available_reward": 173341.7149435618,
+          "reward_percent": 49.30849407109262,
+          "true_reward": 85472.18923567643
+        },
+        "area_priority_c2": {
+          "available_reward": 2156648.549153164,
+          "reward_percent": 49.768068298455134,
+          "true_reward": 1073322.3229001884
+        }
+      },
+      "schedule": "randomized_deadlines/area_only/lagrangian/schedule.json",
+      "search_s": 19.143777959,
+      "selected_candidate": "independent_paths",
+      "timing_policy": "uniform_next_deadline_5h_to_cadence_seed_20261113",
+      "true_reward": 85472.18923567643,
+      "unique_job_area_km2": 126466.18413531991,
+      "verification_s": 22.059711415,
+      "workload": "randomized_deadlines"
+    },
+    {
+      "capture_count": 24427,
+      "due_deadlines": 2334,
+      "met_deadlines": 1063,
+      "met_percent": 45.54413024850043,
+      "missed_deadlines": 1271,
+      "missed_percent": 54.45586975149957,
+      "optimized_for": "area_priority_c2",
+      "optimizer": "independent_paths",
+      "repeated_job_area_km2": 766355.6522445272,
+      "report": "randomized_deadlines/area_priority_c2/independent_paths/report.json",
+      "rewards_by_model": {
+        "area_only": {
+          "available_reward": 173341.7149435618,
+          "reward_percent": 46.04354785702821,
+          "true_reward": 79812.6754762323
+        },
+        "area_priority_c2": {
+          "available_reward": 2156648.549153164,
+          "reward_percent": 51.50933376146621,
+          "true_reward": 1110875.299245122
+        }
+      },
+      "schedule": "randomized_deadlines/area_priority_c2/independent_paths/schedule.json",
+      "search_s": 0.028676288,
+      "selected_candidate": "independent_paths",
+      "timing_policy": "uniform_next_deadline_5h_to_cadence_seed_20261113",
+      "true_reward": 1110875.299245122,
+      "unique_job_area_km2": 117386.97867813123,
+      "verification_s": 8.710174154,
+      "workload": "randomized_deadlines"
+    },
+    {
+      "capture_count": 24427,
+      "due_deadlines": 2334,
+      "met_deadlines": 1063,
+      "met_percent": 45.54413024850043,
+      "missed_deadlines": 1271,
+      "missed_percent": 54.45586975149957,
+      "optimized_for": "area_priority_c2",
+      "optimizer": "coordinate_improvement",
+      "repeated_job_area_km2": 766355.6522445272,
+      "report": "randomized_deadlines/area_priority_c2/coordinate_improvement/report.json",
+      "rewards_by_model": {
+        "area_only": {
+          "available_reward": 173341.7149435618,
+          "reward_percent": 46.04354785702821,
+          "true_reward": 79812.6754762323
+        },
+        "area_priority_c2": {
+          "available_reward": 2156648.549153164,
+          "reward_percent": 51.50933376146621,
+          "true_reward": 1110875.299245122
+        }
+      },
+      "schedule": "randomized_deadlines/area_priority_c2/coordinate_improvement/schedule.json",
+      "search_s": 0.251158475,
+      "selected_candidate": "independent_paths",
+      "timing_policy": "uniform_next_deadline_5h_to_cadence_seed_20261113",
+      "true_reward": 1110875.299245122,
+      "unique_job_area_km2": 117386.97867813123,
+      "verification_s": 9.029215382,
+      "workload": "randomized_deadlines"
+    },
+    {
+      "capture_count": 24427,
+      "due_deadlines": 2334,
+      "met_deadlines": 1063,
+      "met_percent": 45.54413024850043,
+      "missed_deadlines": 1271,
+      "missed_percent": 54.45586975149957,
+      "optimized_for": "area_priority_c2",
+      "optimizer": "lagrangian",
+      "repeated_job_area_km2": 766355.6522445272,
+      "report": "randomized_deadlines/area_priority_c2/lagrangian/report.json",
+      "rewards_by_model": {
+        "area_only": {
+          "available_reward": 173341.7149435618,
+          "reward_percent": 46.04354785702821,
+          "true_reward": 79812.6754762323
+        },
+        "area_priority_c2": {
+          "available_reward": 2156648.549153164,
+          "reward_percent": 51.50933376146621,
+          "true_reward": 1110875.299245122
+        }
+      },
+      "schedule": "randomized_deadlines/area_priority_c2/lagrangian/schedule.json",
+      "search_s": 15.89584805,
+      "selected_candidate": "independent_paths",
+      "timing_policy": "uniform_next_deadline_5h_to_cadence_seed_20261113",
+      "true_reward": 1110875.299245122,
+      "unique_job_area_km2": 117386.97867813123,
+      "verification_s": 18.945946047,
+      "workload": "randomized_deadlines"
+    }
+  ],
+  "elapsed_s": 148.599708096,
+  "interpretation": [
+    "Every row has the same workload, graph, job reward policies and deadline denominator.",
+    "Coordinate improvement and Lagrangian relaxation retained their starting independent plan after polygon verification; no true-reward improvement was demonstrated at this sampling density and budget.",
+    "Cross-evaluation rewards are deduplicated per job/deadline; physical acquisitions can legitimately satisfy multiple different jobs.",
+    "Deadline alignment and cadence redesign were not run; the randomized workload is unchanged."
+  ]
+}

@@ -64,6 +64,21 @@ impl Illumination {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RewardMode {
+    UniqueArea,
+    CompleteObservation,
+}
+impl RewardMode {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::UniqueArea => "Unique area (partial credit)",
+            Self::CompleteObservation => "Completed observation only",
+        }
+    }
+}
+
 /// Cadence slots start at run start + phase, or one cadence before an explicit
 /// next deadline for ongoing jobs. No observation is carried into another slot. Local solar time is
 /// circular (e.g. 23:30 ± 1 h includes 00:15), not civil time or satellite eclipse.
@@ -71,12 +86,16 @@ impl Illumination {
 #[serde(default)]
 pub struct Acquisition {
     pub fulfilment: Fulfilment,
+    /// Reward earned by unique partial coverage or only by a completed request.
+    /// Older presets inherit the natural policy for their fulfilment type.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reward_mode: Option<RewardMode>,
     pub mosaic_timing: MosaicTiming,
     /// Collection window ending at each delivery deadline. None preserves the
     /// full cadence window. Independent crops do not require mosaic coherence.
     pub mosaic_span_hours: Option<f64>,
     pub admission: Option<crate::admission::Basis>,
-    /// Larger values have strictly higher admission priority. Ties use job ID.
+    /// Priority exponent in the configurable scheduler reward c^priority.
     pub priority: u16,
     pub phase_hours: f64,
     /// Ongoing workload: next deadline after planning start, followed by cadence.
@@ -91,6 +110,7 @@ impl Default for Acquisition {
     fn default() -> Self {
         Self {
             fulfilment: Fulfilment::Independent,
+            reward_mode: None,
             mosaic_timing: MosaicTiming::CadenceWindow,
             mosaic_span_hours: None,
             admission: None,
@@ -105,6 +125,12 @@ impl Default for Acquisition {
     }
 }
 impl Acquisition {
+    pub fn effective_reward_mode(&self) -> RewardMode {
+        self.reward_mode.unwrap_or(match self.fulfilment {
+            Fulfilment::Independent => RewardMode::UniqueArea,
+            Fulfilment::Mosaic => RewardMode::CompleteObservation,
+        })
+    }
     pub fn validate(&self, cadence: f64) -> Result<(), String> {
         if self
             .first_deadline_hours
@@ -279,6 +305,7 @@ impl AcquisitionGenerator {
             }
         };
         let mut acquisition = Acquisition {
+            reward_mode: None,
             fulfilment: if rng.unit() < self.mosaic_fraction {
                 Fulfilment::Mosaic
             } else {
@@ -306,12 +333,13 @@ impl AcquisitionGenerator {
                     MosaicTiming::CloseInTime
                 };
         }
+        acquisition.reward_mode = Some(acquisition.effective_reward_mode());
         acquisition
     }
 }
 
-/// Future overload policy: remove whole jobs in this order, never exchange a
-/// higher-priority job for any number of lower-priority jobs. Baseline never drops.
+/// Legacy admission ordering, separate from the scheduler's area/priority reward.
+/// This helper only returns an ordering; it does not deactivate ongoing jobs.
 pub fn lowest_priority_first(jobs: &[Job]) -> Vec<usize> {
     let mut order: Vec<_> = (0..jobs.len()).collect();
     order.sort_by(|&a, &b| {
@@ -1091,6 +1119,23 @@ mod tests {
 #[cfg(test)]
 mod collection_timing_tests {
     use super::*;
+    #[test]
+    fn per_job_reward_policy_defaults_and_overrides_survive_serialization() {
+        let mut acquisition: Acquisition =
+            serde_json::from_str(r#"{"fulfilment":"mosaic"}"#).unwrap();
+        assert_eq!(
+            acquisition.effective_reward_mode(),
+            RewardMode::CompleteObservation
+        );
+        acquisition.reward_mode = Some(RewardMode::UniqueArea);
+        let restored: Acquisition =
+            serde_json::from_slice(&serde_json::to_vec(&acquisition).unwrap()).unwrap();
+        assert_eq!(restored.effective_reward_mode(), RewardMode::UniqueArea);
+        assert_eq!(
+            Acquisition::default().effective_reward_mode(),
+            RewardMode::UniqueArea
+        );
+    }
     #[test]
     fn coherence_modes_separate_solar_time_from_elapsed_time_and_deadlines() {
         let mut a = Acquisition {

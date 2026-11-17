@@ -1,0 +1,65 @@
+{
+  "experiment": "Within-path unique coverage in coordinate replacements",
+  "comparison": "Same aligned 24-hour graph, reward model, independent starting plan, two coordinate sweeps, four workers and exact polygon acceptance. No Lagrangian iterations in these two measurement runs.",
+  "graph": {
+    "actions": 155876,
+    "coverage_witnesses": 22113,
+    "satellites": 60,
+    "solver_arcs": 8423392,
+    "solver_nodes": 467748
+  },
+  "same_inputs_verified": true,
+  "control": {
+    "true_reward": 1591017.760577562,
+    "planned_met_deadlines": 1978,
+    "planned_met_rate_percent": 84.74721508140532,
+    "planned_missed_deadlines": 356,
+    "capture_count": 6577,
+    "unique_job_area_km2": 158225.75118048792,
+    "repeated_job_area_km2": 416884.00954185915,
+    "path_feasibility": "passed",
+    "search_s": 5.755025083,
+    "verification_s": 38.486577384,
+    "elapsed_s": 89.031568196,
+    "observed_process_memory_bytes": 708665344,
+    "replacement_search": null,
+    "polygon_acceptance_s": 5.471681821999997,
+    "accepted_paths": 53,
+    "proposed_paths": 120,
+    "report": "artifacts/scheduling-solutions/worldview60-additive-control-coordinate-20261117/report.json"
+  },
+  "unique_coverage": {
+    "true_reward": 1609613.654393216,
+    "planned_met_deadlines": 2028,
+    "planned_met_rate_percent": 86.88946015424165,
+    "planned_missed_deadlines": 306,
+    "capture_count": 6646,
+    "unique_job_area_km2": 159374.9690225679,
+    "repeated_job_area_km2": 399361.30670398247,
+    "path_feasibility": "passed",
+    "search_s": 19.547983112,
+    "verification_s": 64.20160281,
+    "elapsed_s": 164.780887901,
+    "observed_process_memory_bytes": 742539264,
+    "replacement_search": {
+      "elapsed_s": 9.696884329000001,
+      "labels_per_node": 4,
+      "method": "unique_coverage"
+    },
+    "polygon_acceptance_s": 8.829056378000002,
+    "accepted_paths": 41,
+    "proposed_paths": 120,
+    "report": "artifacts/scheduling-solutions/worldview60-unique-paths-coordinate-20261117/report.json"
+  },
+  "changes": {
+    "true_reward_percent": 1.168804916979882,
+    "met_percentage_points": 2.1422450728363316,
+    "repeated_area_percent": -4.203256166417491,
+    "search_time_ratio": 3.396680784197375
+  },
+  "binary_sha256": {
+    "control": "544c2bc6d1ad7c597d8f6220a015ffaccbe28ec8612e55732a00912d87f25569",
+    "unique_coverage": "7ebb682df94bef0ff9c8bbebf1b40ac1d6e940b41f0c82edd69c008f261d8245"
+  },
+  "limitations": "Unique coverage is enforced over sampled witnesses during replacement search. Exact polygon acceptance protects true reward against rejected proposals. The four-history frontier is a bounded heuristic. Timings are single runs on an active workstation with variable system contention, including concurrent compilation."
+}

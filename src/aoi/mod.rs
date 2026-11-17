@@ -1,6 +1,7 @@
 //! Native and browser AOI generation. Generated AOIs stay separate from
 //! the circular routing-demo targets and do not acquire application semantics.
 
+mod colors;
 mod compact;
 mod data;
 mod environment;

@@ -3,5 +3,6 @@
   "output": "../../../artifacts/scheduling-solutions/worldview60-ongoing-baseline-24h-20261113",
   "horizon_s": 86400,
   "samples_per_axis": 3,
-  "workers": 4
+  "workers": 4,
+  "optimizer": "legacy_independent"
 }

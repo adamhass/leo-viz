@@ -44,6 +44,9 @@ pub struct Config {
     /// Shared future-deadline crops on retained captures are still recorded.
     #[serde(default)]
     pub only_actions_serving_due_deadlines: bool,
+    /// None retains the historical fixed-grid, one-tick builder.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub strips: Option<super::strips::Options>,
 }
 fn default_workers() -> usize {
     resources::worker_limit()
@@ -92,6 +95,11 @@ pub fn load_preset(path: &Path) -> Result<(Vec<Job>, Vec<Region>, u64), String> 
 #[derive(Serialize, Deserialize)]
 pub struct SatelliteSummary {
     pub satellite: usize,
+    /// AOI-derived pointing modes are local to this satellite. Empty uses Summary.modes.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub modes: Vec<Mode>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub strip_generation: Option<super::strips::Statistics>,
     pub actions: u64,
     pub nodes: u64,
     pub edges: u64,
@@ -104,7 +112,7 @@ pub struct SatelliteSummary {
     pub elapsed_s: f64,
     pub observed_process_memory_bytes: u64,
     #[serde(skip)]
-    job_hits: Vec<bool>,
+    pub(super) job_hits: Vec<bool>,
 }
 #[derive(Serialize, Deserialize)]
 pub struct Summary {
@@ -135,12 +143,21 @@ pub struct Summary {
     pub constellation: leo_sim::orbit::WalkerShell,
     pub assumptions: Vec<String>,
 }
+impl Summary {
+    pub fn modes_for(&self, satellite: usize) -> &[Mode] {
+        self.satellites
+            .iter()
+            .find(|s| s.satellite == satellite)
+            .filter(|s| !s.modes.is_empty())
+            .map_or(&self.modes, |s| s.modes.as_slice())
+    }
+}
 fn worldview_shell() -> leo_sim::orbit::WalkerShell {
     Fleet::WorldView60.shell()
 }
 
-type JsonLines = GzEncoder<BufWriter<File>>;
-fn check_disk(path: &Path) -> Result<(), String> {
+pub(super) type JsonLines = GzEncoder<BufWriter<File>>;
+pub(super) fn check_disk(path: &Path) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
         use std::os::unix::ffi::OsStrExt;
@@ -161,17 +178,17 @@ fn check_disk(path: &Path) -> Result<(), String> {
     let _ = path;
     Ok(())
 }
-fn writer(path: &Path) -> Result<JsonLines, String> {
+pub(super) fn writer(path: &Path) -> Result<JsonLines, String> {
     Ok(GzEncoder::new(
         BufWriter::new(File::create(path).map_err(|e| e.to_string())?),
         Compression::fast(),
     ))
 }
-fn line(w: &mut impl Write, v: &impl Serialize) -> Result<(), String> {
+pub(super) fn line(w: &mut impl Write, v: &impl Serialize) -> Result<(), String> {
     serde_json::to_writer(&mut *w, v).map_err(|e| e.to_string())?;
     w.write_all(b"\n").map_err(|e| e.to_string())
 }
-fn finish(w: JsonLines, part: &Path, final_path: &Path) -> Result<u64, String> {
+pub(super) fn finish(w: JsonLines, part: &Path, final_path: &Path) -> Result<u64, String> {
     let mut file = w.finish().map_err(|e| e.to_string())?;
     file.flush().map_err(|e| e.to_string())?;
     file.get_ref().sync_all().map_err(|e| e.to_string())?;
@@ -180,15 +197,15 @@ fn finish(w: JsonLines, part: &Path, final_path: &Path) -> Result<u64, String> {
     Ok(fs::metadata(final_path).map_err(|e| e.to_string())?.len())
 }
 
-#[derive(Serialize)]
-struct CropRecord {
-    job: usize,
-    slot: u64,
-    patch: usize,
-    start_s: f64,
-    end_s: f64,
-    area_km2: f64,
-    polygons_xy_km: geometry::Polygons,
+#[derive(Clone, Serialize, Deserialize)]
+pub(super) struct CropRecord {
+    pub job: usize,
+    pub slot: u64,
+    pub patch: usize,
+    pub start_s: f64,
+    pub end_s: f64,
+    pub area_km2: f64,
+    pub polygons_xy_km: geometry::Polygons,
 }
 #[derive(Serialize)]
 struct ActionRecord<'a> {
@@ -267,11 +284,11 @@ fn write_graph(
     Ok((nodes as u64, edges, maneuvers, bytes))
 }
 
-struct SolarMasks {
-    step_s: f64,
-    bits: Vec<Vec<bool>>,
-    due_bits: Option<Vec<Vec<bool>>>,
-    due_counts: Vec<usize>,
+pub(super) struct SolarMasks {
+    pub(super) step_s: f64,
+    pub(super) bits: Vec<Vec<bool>>,
+    pub(super) due_bits: Option<Vec<Vec<bool>>>,
+    pub(super) due_counts: Vec<usize>,
 }
 // A conservative one-minute prefilter shared across satellites. Exact cadence,
 // collection-window and solar/elevation checks happen in polygon generation.
@@ -494,6 +511,8 @@ fn satellite(
     peak = peak.max(resources::process_memory().unwrap_or(0));
     Ok(SatelliteSummary {
         satellite: id,
+        modes: Vec::new(),
+        strip_generation: None,
         actions: topology.actions.len() as u64,
         nodes,
         edges,
@@ -511,6 +530,9 @@ fn satellite(
 
 pub fn generate(config: &Config) -> Result<Summary, String> {
     config.options.validate()?;
+    if let Some(strips) = &config.strips {
+        strips.validate(&config.options)?;
+    }
     if config.output.exists() {
         return Err("Output must be a new directory; existing runs are never overwritten".into());
     }
@@ -546,6 +568,16 @@ pub fn generate(config: &Config) -> Result<Summary, String> {
         },
     )?;
     drop(regions);
+    let grouping_context = config.strips.as_ref().map(|s| crate::job_grouper::Context {
+        epoch_unix_s: config.epoch_unix_s, horizon_s: config.options.duration_s,
+        due_only: config.only_actions_serving_due_deadlines,
+        swath_width_km: config.options.width_km, strip_spacing_km: config.options.cross_spacing_km,
+        boundary_margin_km: s.boundary_margin_km, max_strip_duration_s: s.max_duration_s,
+    });
+    let enrichment = config.strips.as_ref().and_then(|s| s.grouping.as_ref()).map(|policy| {
+        eprintln!("Grouping shared collection AOIs before satellite graph construction");
+        crate::job_grouper::enrich(&jobs, &atlas, grouping_context.as_ref().unwrap(), policy)
+    }).transpose()?;
     let modes = config.options.modes();
     eprintln!(
         "Building solar-time masks; {} pointing modes, {} ticks, {} patches",
@@ -588,6 +620,18 @@ pub fn generate(config: &Config) -> Result<Summary, String> {
         serde_json::to_vec(&charts).map_err(|e| e.to_string())?,
     )
     .map_err(|e| e.to_string())?;
+    if let Some(enriched) = &enrichment {
+        fs::write(config.output.join("grouping-report.json"),
+            serde_json::to_vec_pretty(&enriched.report).map_err(|e| e.to_string())?).map_err(|e| e.to_string())?;
+        let mut writer = GzEncoder::new(File::create_new(config.output.join("collection-groups.json.gz"))
+            .map_err(|e| e.to_string())?, Compression::fast());
+        serde_json::to_writer(&mut writer, &serde_json::json!({"schema_version":1,
+            "preset_hash_fnv1a64":checksum,"context":grouping_context,"groups":enriched.groups}))
+            .map_err(|e| e.to_string())?;
+        writer.finish().map_err(|e| e.to_string())?;
+        eprintln!("Added {} collection groups covering {} original jobs in {:.3}s",
+            enriched.report.groups_added, enriched.report.grouped_jobs, enriched.report.elapsed_s);
+    }
     let shell = Fleet::WorldView60.shell();
     let ids: Vec<_> =
         (config.first_satellite..config.first_satellite + config.satellite_count).collect();
@@ -596,6 +640,17 @@ pub fn generate(config: &Config) -> Result<Summary, String> {
         ids,
         config.workers.min(resources::worker_limit()),
         |id| {
+            if config.strips.is_some() {
+                return super::strips::satellite(
+                    config,
+                    &jobs,
+                    &atlas,
+                    &masks,
+                    enrichment.as_ref().map_or(&[], |e| e.groups.as_slice()),
+                    id,
+                    shell.elements(id / 3, id % 3),
+                );
+            }
             satellite(
                 config,
                 &jobs,
@@ -637,7 +692,7 @@ pub fn generate(config: &Config) -> Result<Summary, String> {
             .entry(format!("{} h", job.cadence_hours))
             .or_insert(0) += 1;
     }
-    let summary=Summary {schema_version:3,status:"complete".into(),config:config.clone(),preset_hash_fnv1a64:checksum,
+    let summary=Summary {schema_version:if config.strips.is_some(){4}else{3},status:"complete".into(),config:config.clone(),preset_hash_fnv1a64:checksum,
         job_count:jobs.len(),jobs_with_due_deadlines:due_jobs,due_observations:due,jobs_with_no_due_deadline:jobs.len()-due_jobs,
         jobs_with_candidates:seen.iter().filter(|x|**x).count(),cadence_job_counts:cadences,
         slew_rate_deg_s:config.options.slew_rate_rad_s().to_degrees(),modes,
@@ -651,10 +706,10 @@ pub fn generate(config: &Config) -> Result<Summary, String> {
         assumptions:vec![
             "WorldView-60: 20 planes x 3 satellites, F=14, 617 km, 97.9 degrees, J2; orbit epoch equals planning start. Not live spacecraft ephemerides.".into(),
             "Finite pointing modes follow the orbit in a nadir-relative frame, with constant along/cross ground offsets. Transitions use a time-invariant quaternion surrogate calibrated to the 200 km / 12 s example; the settling allowance is assumed. Tracking of the moving reference frame has no extra cost.".into(),
-            "Candidate strips occupy one whole time step. Constant observation width and quality. Circular reach; modes conservatively reserve half the width at the boundary. Footprints use the existing swept-scanline polygon approximation.".into(),
+            "Fixed-grid candidates occupy one whole time step; AOI strip candidates use explicit full-strip intervals with substeps only for geometry. Constant observation width and quality. Circular reach; modes conservatively reserve half the width at the boundary. Footprints use the existing swept-scanline polygon approximation.".into(),
             "Cadence delivery windows use either a legacy phase or an explicit ongoing-job next deadline; optional shorter mosaic collection spans end at each deadline. Solar-time and close-in-time gates apply. Shared captures allowed. No initial imagery or committed actions; initial pointing is nadir.".into(),
             if config.only_actions_serving_due_deadlines {"Only actions serving a deadline due within the graph horizon are retained, with incidental future-deadline crops preserved. All job indices remain intact. Discarded zero-reward captures are unnecessary transit maneuvers under the time-invariant metric slew model with free waiting; this scope is only suitable for an objective rewarding deadlines in this horizon.".into()} else {"Opportunities are included for every job, even without a deadline in the graph horizon.".into()},
-            "Every action may be skipped without earning its crop coverage. A wait spine retains the pointing mode. End-to-earliest-start transitions preserve all action subsequences of the dense graph for this finite model.".into(),
+            "Every action may be skipped without earning its crop coverage. Fixed-grid graphs use mode spines; AOI strip graphs use exact nearby transitions and conservative all-pointing wait hubs. Both preserve feasible action subsequences for the configured maneuver model.".into(),
             "Direct transitions compare explicit acquisition timestamps against the unrounded quaternion slew duration in seconds. Candidate imaging remains sampled at the configured step; maneuver duration is independent of that sampling.".into(),
             "No storage, bandwidth, processing, energy, or cloud constraints. No paths have been optimized and no job or mosaic feasibility verdict is implied. Candidate union is only an upper bound. Finer time/pointing sampling may change results.".into(),
             "Crop coordinates are km in each patch's spherical Lambert azimuthal equal-area chart. Charts are identified in charts.json. Job indices refer to the saved preset's workload.jobs order. Sharing requires polygon union, never sums of crop areas.".into(),
@@ -728,15 +783,24 @@ pub fn compact(output: &Path) -> Result<Summary, String> {
         if actions.len() as u64 != satellite.actions {
             return Err("Graph action count disagrees with manifest".into());
         }
-        let topology = Topology::new(actions, &summary.modes, &summary.config.options)?;
-        let (nodes, edges, maneuvers, bytes) =
-            write_graph(&summary.config, satellite.satellite, &topology)?;
+        let (nodes, edges, maneuvers, bytes) = if summary.config.strips.is_some() {
+            let (n, e, m, b, _, _) = super::intervals::write(
+                &summary.config,
+                satellite.satellite,
+                &actions,
+                &satellite.modes,
+            )?;
+            (n, e, m, b)
+        } else {
+            let topology = Topology::new(actions, &summary.modes, &summary.config.options)?;
+            write_graph(&summary.config, satellite.satellite, &topology)?
+        };
         satellite.nodes = nodes;
         satellite.edges = edges;
         satellite.maneuver_edges = maneuvers;
         satellite.graph_bytes = bytes;
     }
-    summary.schema_version = 3;
+    summary.schema_version = if summary.config.strips.is_some() {4} else {3};
     summary.status = "complete".into();
     summary.total_nodes = summary.satellites.iter().map(|s| s.nodes).sum();
     summary.total_edges = summary.satellites.iter().map(|s| s.edges).sum();
@@ -801,6 +865,7 @@ mod tests {
             first_satellite: 0,
             satellite_count: 1,
             only_actions_serving_due_deadlines: false,
+            strips: None,
         };
         let jobs = jobs();
         let masks = masks(&jobs, &config).unwrap();
@@ -879,6 +944,7 @@ mod tests {
             first_satellite: 0,
             satellite_count: 1,
             only_actions_serving_due_deadlines: false,
+            strips: None,
         };
         let summary = generate(&config).unwrap();
         assert!(summary.total_actions > 0);
@@ -919,6 +985,79 @@ mod tests {
         assert_eq!(report["verification"]["due_acquisition_deadlines"], 3);
         assert_eq!(report["verification"]["path_feasibility"], "passed");
         assert!(report["verification"]["capture_count"].as_u64().unwrap() > 0);
+        assert!(report["postprocess"].is_null());
+        let postprocessed = super::super::solver::postprocess_saved(
+            &super::super::solver::Config {
+                graph_directory: config.output.clone(),
+                output: root.join("postprocessed-saved"),
+                horizon_s: 120.0,
+                workers: 1,
+                postprocess: Some(Default::default()),
+                ..Default::default()
+            },
+            &root.join("solution/schedule.json"),
+        ).unwrap();
+        assert_eq!(postprocessed["method"], "postprocess_saved_schedule");
+        assert_eq!(postprocessed["postprocess"]["accepted"], true);
+        assert!(postprocessed["iterations"].as_array().unwrap().is_empty());
+        // Exercise the actual comparison workflow on a generated graph: all
+        // optimizers use the same workload and all output plans are cross-scored.
+        use crate::scheduling::solver::{
+            experiment::{Experiment, WorkloadVariant},
+            reward::RewardModel,
+            Optimizer,
+        };
+        let comparison = crate::scheduling::solver::experiment::run(&Experiment {
+            output: root.join("comparison"),
+            workloads: vec![WorkloadVariant {
+                id: "fixture".into(),
+                incumbent_from: None,
+                timing_policy: "fixed_test_deadlines".into(),
+                graph_directory: config.output.clone(),
+            }],
+            reward_models: [
+                ("area".into(), RewardModel { priority_base: 1.0 }),
+                ("priority".into(), RewardModel { priority_base: 2.0 }),
+            ]
+            .into(),
+            optimizers: vec![
+                Optimizer::IndependentPaths,
+                Optimizer::CoordinateImprovement,
+                Optimizer::Lagrangian,
+            ],
+            solver: crate::scheduling::solver::Config {
+                horizon_s: 120.0,
+                iterations: 3,
+                workers: 1,
+                postprocess: Some(Default::default()),
+                ..Default::default()
+            },
+        })
+        .unwrap();
+        assert_eq!(comparison["results"].as_array().unwrap().len(), 6);
+        for row in comparison["results"].as_array().unwrap() {
+            assert_eq!(row["postprocess"]["accepted"], true);
+            assert_eq!(row["due_deadlines"], 3);
+            assert_eq!(row["rewards_by_model"].as_object().unwrap().len(), 2);
+            let id = row["optimized_for"].as_str().unwrap();
+            assert_eq!(
+                row["true_reward"],
+                row["rewards_by_model"][id]["true_reward"]
+            );
+            assert!(
+                row["rewards_by_model"]["priority"]["true_reward"]
+                    .as_f64()
+                    .unwrap()
+                    >= row["rewards_by_model"]["area"]["true_reward"]
+                        .as_f64()
+                        .unwrap()
+            );
+            assert!(root
+                .join("comparison")
+                .join(row["schedule"].as_str().unwrap())
+                .exists());
+        }
+        assert!(!root.join("comparison/INCOMPLETE").exists());
         let graph_header: serde_json::Value = serde_json::from_str(
             &BufReader::new(GzDecoder::new(
                 File::open(config.output.join("satellite-000.graph.jsonl.gz")).unwrap(),

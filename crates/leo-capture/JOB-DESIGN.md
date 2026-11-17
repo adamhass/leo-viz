@@ -1,5 +1,9 @@
 # Constellation-derived job design
 
+For optional geographic alignment of an existing ongoing workload's deadlines,
+see [cadence alignment](CADENCE-ALIGNMENT.md). It runs before graph construction
+and preserves all job requirements and the original deadline counts.
+
 `leo-job-design` adapts an existing combined AOI/jobs preset without redrawing
 its polygons, priorities, pipelines, fulfilment types or output densities:
 
@@ -11,7 +15,7 @@ cargo run --release --manifest-path crates/leo-capture/Cargo.toml -j 2 \
 The command creates a new `preset.json.gz` and `report.json`. The original preset
 and previous graph/scheduler results remain untouched. The generated preset is
 loadable through the application's existing preset loader. New workloads use
-schema 5; capture checkpoints use schema 4. Older workloads/checkpoints still
+schema 6 (including a per-job scheduling reward policy); capture checkpoints use schema 4. Older workloads/checkpoints still
 load with their historical collection semantics.
 
 ## Geometry and service admission

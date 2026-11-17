@@ -55,16 +55,28 @@ pub fn export(schedule: &Path, output: &Path) -> Result<()> {
         &preset_path,
         &mut satellites,
     )?;
+    let variable = summary.config.strips.is_some();
+    let mut replay_modes = summary.modes.clone();
+    if variable {
+        replay_modes.clear();
+        for satellite in &mut satellites {
+            let offset = replay_modes.len();
+            replay_modes.extend_from_slice(summary.modes_for(satellite.satellite));
+            for capture in &mut satellite.captures {
+                capture.mode += offset;
+            }
+        }
+    }
     let replay = Replay::new(Document {
         assessment: Some(assessment),
-        schema_version: 1,
+        schema_version: if variable { 2 } else { 1 },
         epoch_unix_s: summary.config.epoch_unix_s,
         horizon_s: report["config"]["horizon_s"]
             .as_f64()
             .ok_or("Missing horizon")?,
         options: summary.config.options,
         constellation: summary.constellation,
-        modes: summary.modes,
+        modes: replay_modes,
         preset: read_json(&preset_path)?,
         satellites,
         selected_candidate: report["selected_candidate"]

@@ -4,7 +4,7 @@ use crate::{
     workload::{Acquisition, AoiRef, Pipeline},
 };
 
-fn graph(
+pub(super) fn graph(
     actions: Vec<super::super::Action>,
     coverage: Vec<Vec<u32>>,
     transitions: &[(usize, usize)],
@@ -36,7 +36,7 @@ fn graph(
         sink,
     }
 }
-fn action(tick: u32) -> super::super::Action {
+pub(super) fn action(tick: u32) -> super::super::Action {
     super::super::Action::at_tick(tick, 0, 1.0)
 }
 
@@ -124,7 +124,7 @@ fn job(id: &str, priority: u16) -> Job {
         window_bytes_per_km2: 1.,
     }
 }
-fn tiny_model() -> Model {
+pub(super) fn tiny_model() -> Model {
     let jobs = vec![job("a", 5), job("b", 4)];
     let atlas = Atlas::new(&[], &[], 2., 2., |_| true).unwrap();
     let config = super::super::Config {
@@ -136,6 +136,7 @@ fn tiny_model() -> Model {
         first_satellite: 0,
         satellite_count: 2,
         only_actions_serving_due_deadlines: false,
+            strips: None,
     };
     let manifest = super::super::Summary {
         schema_version: 2,
@@ -192,6 +193,7 @@ fn tiny_model() -> Model {
             },
         ],
         point_request: vec![0, 1],
+        point_areas: vec![1.0, 1.0],
         graphs: vec![
             graph(
                 vec![action(0), action(0)],

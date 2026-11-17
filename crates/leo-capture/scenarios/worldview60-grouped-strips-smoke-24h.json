@@ -1,0 +1,26 @@
+{
+  "preset": "../../../artifacts/job-design/worldview60-overlap-demand-matched-20261116/preset.json.gz",
+  "output": "../../../artifacts/scheduling-graphs/worldview60-grouped-strips-smoke-24h-20261117",
+  "epoch_unix_s": 1794528000,
+  "workers": 8,
+  "satellite_count": 1,
+  "only_actions_serving_due_deadlines": true,
+  "options": {
+    "duration_s": 86400,
+    "step_s": 1,
+    "width_km": 13.1,
+    "reach_km": 450,
+    "cross_spacing_km": 11.79,
+    "along_offsets_km": [
+      -150,
+      0,
+      150
+    ],
+    "settle_s": 2,
+    "edge_km": 2,
+    "cell_deg": 2
+  },
+  "strips": {
+    "grouping": {}
+  }
+}

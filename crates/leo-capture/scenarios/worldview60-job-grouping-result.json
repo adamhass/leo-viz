@@ -1,0 +1,164 @@
+{
+  "schema_version": 1,
+  "status": "complete",
+  "implementation": "shared_collection_groups_v1",
+  "runs": [
+    {
+      "report": "artifacts/job-design/worldview60-grouped-aligned-due-24h-20261117/report.json",
+      "config": {
+        "cell_deg": 2.0,
+        "context": {
+          "boundary_margin_km": 0.05,
+          "due_only": true,
+          "epoch_unix_s": 1794528000.0,
+          "horizon_s": 86400.0,
+          "max_strip_duration_s": 600.0,
+          "strip_spacing_km": 11.79,
+          "swath_width_km": 13.1
+        },
+        "edge_km": 2.0,
+        "output": "/Users/adam/Dev/leo-viz/crates/leo-capture/scenarios/../../../artifacts/job-design/worldview60-grouped-aligned-due-24h-20261117",
+        "policy": {
+          "access_fraction": 1.0,
+          "ground_speed_km_s": 7.0,
+          "maneuver_allowance_s": 14.0,
+          "max_members": 64,
+          "max_span_km": 150.0,
+          "max_strips": 8,
+          "min_overlap_fraction": 0.0,
+          "nominal_access_gap_hours": 2.4,
+          "solar_step_s": 60.0,
+          "strips_per_access": 1
+        },
+        "preset": "/Users/adam/Dev/leo-viz/crates/leo-capture/scenarios/../../../artifacts/job-design/worldview60-overlap-demand-matched-20261116/preset.json.gz",
+        "workers": 8
+      },
+      "source_preset_hash_fnv1a64": 8615081596400989138,
+      "statistics": {
+        "common_window_hours": {
+          "max": 10.533333333333333,
+          "mean": 7.815201494353208,
+          "median": 7.983333333333333,
+          "min": 0.7666666666666667
+        },
+        "compatible_request_pairs": 407,
+        "elapsed_s": 0.34716724,
+        "eligible_requests": 2265,
+        "grouped_jobs": 428,
+        "grouped_requests": 428,
+        "groups_added": 151,
+        "members_per_group": {
+          "max": 18.0,
+          "mean": 2.834437086092715,
+          "median": 2.0,
+          "min": 2.0
+        },
+        "merge_attempts": 316,
+        "merge_s": 0.006231185,
+        "original_jobs": 53000,
+        "overlap_s": 0.029548321,
+        "overlapping_job_pairs": 407,
+        "rejected_common_window": 0,
+        "rejected_members": 0,
+        "rejected_repeated_job": 0,
+        "rejected_size": 39,
+        "requests_considered": 2334,
+        "strips_per_group": {
+          "max": 4.0,
+          "mean": 1.728476821192053,
+          "median": 2.0,
+          "min": 1.0
+        },
+        "union_s": 0.0428224,
+        "window_s": 0.26856467
+      },
+      "load_s": 3.013667183,
+      "geometry_s": 0.647527694,
+      "export_s": 0.37032474,
+      "total_s": 4.378943509
+    },
+    {
+      "report": "artifacts/job-design/worldview60-grouped-aligned-all-windows-24h-20261117/report.json",
+      "config": {
+        "cell_deg": 2.0,
+        "context": {
+          "boundary_margin_km": 0.05,
+          "due_only": false,
+          "epoch_unix_s": 1794528000.0,
+          "horizon_s": 86400.0,
+          "max_strip_duration_s": 600.0,
+          "strip_spacing_km": 11.79,
+          "swath_width_km": 13.1
+        },
+        "edge_km": 2.0,
+        "output": "/Users/adam/Dev/leo-viz/crates/leo-capture/scenarios/../../../artifacts/job-design/worldview60-grouped-aligned-all-windows-24h-20261117",
+        "policy": {
+          "access_fraction": 1.0,
+          "ground_speed_km_s": 7.0,
+          "maneuver_allowance_s": 14.0,
+          "max_members": 64,
+          "max_span_km": 150.0,
+          "max_strips": 8,
+          "min_overlap_fraction": 0.0,
+          "nominal_access_gap_hours": 2.4,
+          "solar_step_s": 60.0,
+          "strips_per_access": 1
+        },
+        "preset": "/Users/adam/Dev/leo-viz/crates/leo-capture/scenarios/../../../artifacts/job-design/worldview60-overlap-demand-matched-20261116/preset.json.gz",
+        "workers": 8
+      },
+      "source_preset_hash_fnv1a64": 8615081596400989138,
+      "statistics": {
+        "common_window_hours": {
+          "max": 9.766666666666667,
+          "mean": 7.816261781953647,
+          "median": 7.983333333333333,
+          "min": 0.005388869855960365
+        },
+        "compatible_request_pairs": 33091,
+        "elapsed_s": 10.477390181,
+        "eligible_requests": 41140,
+        "grouped_jobs": 16407,
+        "grouped_requests": 16455,
+        "groups_added": 4080,
+        "members_per_group": {
+          "max": 64.0,
+          "mean": 4.033088235294118,
+          "median": 2.0,
+          "min": 2.0
+        },
+        "merge_attempts": 24294,
+        "merge_s": 1.148220377,
+        "original_jobs": 53000,
+        "overlap_s": 1.652974698,
+        "overlapping_job_pairs": 32401,
+        "rejected_common_window": 60,
+        "rejected_members": 1040,
+        "rejected_repeated_job": 351,
+        "rejected_size": 10468,
+        "requests_considered": 42885,
+        "strips_per_group": {
+          "max": 4.0,
+          "mean": 2.3637254901960785,
+          "median": 2.0,
+          "min": 1.0
+        },
+        "union_s": 0.74523148,
+        "window_s": 6.930963076
+      },
+      "load_s": 3.109163263,
+      "geometry_s": 0.671215279,
+      "export_s": 5.8495843260000004,
+      "total_s": 20.111536732
+    }
+  ],
+  "validation": {
+    "library_tests_passed": 102,
+    "library_benchmarks_ignored": 3,
+    "native_app_compile": "passed",
+    "real_satellite_graph": "artifacts/scheduling-graphs/worldview60-grouped-strips-smoke-24h-20261117/manifest.json",
+    "unchanged_baseline_actions": 3074,
+    "group_generated_actions": 261,
+    "graph_elapsed_s": 14.214964497
+  }
+}

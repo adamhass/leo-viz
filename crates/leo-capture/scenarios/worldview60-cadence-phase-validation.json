@@ -1,0 +1,42 @@
+{
+  "output": "../../../artifacts/scheduling-solutions/worldview60-cadence-phase-validation-20261116",
+  "graph_template": "worldview60-clustered-strips-24h.json",
+  "epoch_unix_s": 1794528000,
+  "phase_offsets_days": [
+    6,
+    12
+  ],
+  "workloads": [
+    {
+      "id": "randomized_deadlines",
+      "timing_policy": "uniform_next_deadline_5h_to_cadence_seed_20261113",
+      "preset": "../../../artifacts/job-design/worldview60-ongoing-20261113/preset.json.gz"
+    },
+    {
+      "id": "overlap_solar",
+      "timing_policy": "cadence_deadline_permutation_v1_overlap_solar",
+      "preset": "../../../artifacts/job-design/worldview60-overlap-solar-20261116/preset.json.gz"
+    },
+    {
+      "id": "overlap_demand_matched",
+      "timing_policy": "cadence_deadline_permutation_v1_overlap_original_demand_solar",
+      "preset": "../../../artifacts/job-design/worldview60-overlap-demand-matched-20261116/preset.json.gz"
+    }
+  ],
+  "reward_models": {
+    "area_priority_c2": {
+      "priority_base": 2.0
+    }
+  },
+  "optimizers": [
+    "lagrangian"
+  ],
+  "solver": {
+    "horizon_s": 86400,
+    "samples_per_axis": 3,
+    "iterations": 30,
+    "repair_sweeps": 2,
+    "workers": 4,
+    "acceptance": "exact_polygon"
+  }
+}

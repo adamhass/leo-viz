@@ -1,5 +1,14 @@
 # Experimental scheduling solver
 
+For AOI-aligned full-strip candidates and optional task clustering, see
+[Strip graph construction](STRIP-GRAPHS.md).
+
+For the current area × exponential-priority objective, per-job partial-credit
+rules and comparable optimizer runs, see [Scheduling experiments](SCHEDULING-EXPERIMENTS.md).
+The strict-priority formulation and results below describe the retained historical
+implementation; the new default uses the common reward objective and exact
+polygon-based acceptance for coordinated path replacements.
+
 The current default visualizer plan is the 58.57% independent-path baseline for
 the redesigned ongoing workload. A portable copy is bundled with the app; the
 [replay guide](../../docs/schedule-playback.md) describes loading it, regenerating

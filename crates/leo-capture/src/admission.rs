@@ -143,7 +143,7 @@ fn cover(intervals: &[(f64, f64)], width: f64, spacing: f64) -> u32 {
 /// Ascending/descending Earth-fixed headings sampled from the actual design
 /// orbit, including its J2 propagation and Earth rotation. Near the turning
 /// latitude use the closest subsatellite latitude (off-nadir access still matters).
-fn bearings(latitude: f64, epoch: f64) -> [f64; 2] {
+pub(crate) fn bearings(latitude: f64, epoch: f64) -> [f64; 2] {
     let e = Fleet::WorldView60.shell().elements(0, 0);
     let period = std::f64::consts::TAU / (e.mu / e.semi_major_km.powi(3)).sqrt();
     let limit = e.inclination_rad.sin().asin().to_degrees().abs() - 0.001;

@@ -62,6 +62,9 @@ pub(super) fn fixture() -> Scene {
         })
         .collect();
     Scene {
+        job_colors: status::JobColors::new(&replay),
+        layer_jobs: vec![],
+        color_time: std::sync::Mutex::new(None),
         replay,
         layers: vec![],
         footprints,

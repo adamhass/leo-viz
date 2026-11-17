@@ -39,7 +39,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         serde_json::from_slice(&input)?
     };
     let mut doc: storage::Document = serde_json::from_value(envelope["workload"].clone())?;
-    doc.schema_version = 5;
+    doc.schema_version = 6;
     doc.jobs = jobs;
     doc.validate()?;
     let mut by_priority = BTreeMap::<u16, [usize; 2]>::new();

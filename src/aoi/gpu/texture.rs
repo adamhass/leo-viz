@@ -8,6 +8,7 @@ pub(crate) struct MapTexture {
     pub id: egui::TextureId,
     texture: wgpu::Texture,
     layers: Vec<(Arc<Preview>, f32)>,
+    color_revisions: Vec<u64>,
     render: RenderState,
 }
 
@@ -39,6 +40,7 @@ impl MapTexture {
             id,
             texture,
             layers: Vec::new(),
+            color_revisions: Vec::new(),
             render: render.clone(),
         }
     }
@@ -75,7 +77,12 @@ impl MapRenderer {
             return false;
         }
         if target.as_ref().is_some_and(|t| {
-            t.layout == layout
+            t.color_revisions
+                == layers
+                    .iter()
+                    .map(|(p, _)| p.color_revision())
+                    .collect::<Vec<_>>()
+                && t.layout == layout
                 && t.layers.len() == layers.len()
                 && t.layers
                     .iter()
@@ -181,6 +188,7 @@ impl MapRenderer {
         render.queue.submit([encoder.finish()]);
         target.layout = layout;
         target.layers = layers.to_vec();
+        target.color_revisions = layers.iter().map(|(p, _)| p.color_revision()).collect();
         true
     }
 }
@@ -337,6 +345,20 @@ mod tests {
         assert!(image.iter().any(|p| p[0] > 20));
         assert!(image.iter().all(|p| p[1] == 0));
         assert!(image.iter().map(|p| p[3]).max().unwrap() < opaque_peak);
+        // A replay-clock update invalidates color caches, but retains geometry/texture.
+        faded[0].0.set_colors(&[[0, 0, 255]]);
+        assert!(renderer.update(
+            &mut target,
+            &render,
+            &ctx,
+            egui::Id::new("test"),
+            &faded,
+            layout
+        ));
+        assert_eq!(target.as_ref().unwrap().id, id);
+        let image = pixels(&render, target.as_ref().unwrap());
+        assert!(image.iter().any(|p| p[2] > 20));
+        assert!(image.iter().all(|p| p[0] == 0 && p[1] == 0));
         assert!(!renderer.update(
             &mut target,
             &render,

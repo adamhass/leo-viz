@@ -3,7 +3,9 @@ use chrono::{DateTime, Utc};
 use eframe::egui;
 use leo_capture::{
     baseline::Options,
-    workload::{Acquisition, AcquisitionGenerator, Fulfilment, Illumination, Job, MosaicTiming},
+    workload::{
+        Acquisition, AcquisitionGenerator, Fulfilment, Illumination, Job, MosaicTiming, RewardMode,
+    },
 };
 use leo_sim::acquisition::CaptureProfile;
 use std::sync::{atomic::Ordering, Arc};
@@ -74,6 +76,17 @@ pub(super) fn job_controls(ui: &mut egui::Ui, a: &mut Acquisition, cadence: f64)
             ui.label("Priority (higher wins)");
             ui.add(egui::DragValue::new(&mut a.priority));
         });
+        let mut reward_mode = a.effective_reward_mode();
+        egui::ComboBox::from_id_salt("job-reward-mode")
+            .selected_text(reward_mode.label())
+            .show_ui(ui, |ui| {
+                for mode in [RewardMode::UniqueArea, RewardMode::CompleteObservation] {
+                    if ui.selectable_value(&mut reward_mode, mode, mode.label()).changed() {
+                        a.reward_mode = Some(reward_mode);
+                    }
+                }
+            });
+        ui.small("Scheduling reward: area × c^priority. Repeated coverage within the same delivery window earns no extra credit.");
         deadline_controls(ui, a, cadence);
         egui::ComboBox::from_id_salt("job-illumination")
             .selected_text(a.illumination.label())

@@ -96,6 +96,7 @@ fn missed_deadlines_include_partial_coverage_but_never_future_jobs() {
         doc.assessment = Some(Assessment {
             job_cadence_hours: None,
             requests: vec![DeadlineOutcome {
+                completed_at_s: None,
                 job: 0,
                 slot: 0,
                 deadline_s: 3600.0,
@@ -110,6 +111,7 @@ fn missed_deadlines_include_partial_coverage_but_never_future_jobs() {
     doc.assessment = Some(Assessment {
         job_cadence_hours: None,
         requests: vec![DeadlineOutcome {
+            completed_at_s: None,
             job: 0,
             slot: 0,
             deadline_s: 3600.0,
@@ -120,6 +122,64 @@ fn missed_deadlines_include_partial_coverage_but_never_future_jobs() {
     assert!(
         Replay::new(doc).is_err(),
         "A future deadline cannot be marked missed"
+    );
+}
+
+#[test]
+fn completion_timestamps_roundtrip_and_legacy_assessments_still_load() {
+    let make = |time| {
+        let mut doc = fixture();
+        doc.horizon_s = 4000.0;
+        doc.assessment = Some(Assessment {
+            job_cadence_hours: None,
+            requests: vec![DeadlineOutcome {
+                job: 0,
+                slot: 0,
+                deadline_s: 3600.0,
+                coverage_fraction: 1.0,
+                complete: true,
+                completed_at_s: time,
+            }],
+        });
+        doc
+    };
+    for time in [None, Some(101.0), Some(111.0)] {
+        let json = serde_json::to_value(make(time)).unwrap();
+        assert_eq!(
+            json["assessment"]["requests"][0]
+                .get("completed_at_s")
+                .is_some(),
+            time.is_some()
+        );
+        let replay = Replay::new(serde_json::from_value(json).unwrap()).unwrap();
+        assert_eq!(
+            replay.document.assessment.unwrap().requests[0].completed_at_s,
+            time
+        );
+    }
+    for time in [
+        f64::NAN,
+        f64::INFINITY,
+        -1.0,
+        0.0,
+        100.0,
+        105.0,
+        112.0,
+        3601.0,
+        4001.0,
+    ] {
+        assert!(
+            Replay::new(make(Some(time))).is_err(),
+            "Accepted invalid completion {time}"
+        );
+    }
+    let mut incomplete = make(Some(101.0));
+    let request = &mut incomplete.assessment.as_mut().unwrap().requests[0];
+    request.complete = false;
+    request.coverage_fraction = 0.5;
+    assert!(
+        Replay::new(incomplete).is_err(),
+        "Partial coverage cannot have a completion timestamp"
     );
 }
 #[test]
@@ -136,6 +196,7 @@ fn incomplete_or_inconsistent_assessments_are_rejected() {
     doc.assessment = Some(Assessment {
         job_cadence_hours: None,
         requests: vec![DeadlineOutcome {
+            completed_at_s: None,
             job: 0,
             slot: 0,
             deadline_s: 3600.0,

@@ -186,6 +186,34 @@ fn lit_bounds(pixels: &[u8]) -> Option<Rect> {
 
 #[test]
 #[ignore = "Requires a native GPU"]
+fn replay_palette_updates_globe_fills_and_outlines_in_place() {
+    let preview = preview(-90.0, 0.0, 4.0);
+    let mut harness = Harness::new();
+    let frame = Rect::from_min_size(Pos2::ZERO, egui::vec2(SIZE as f32, SIZE as f32));
+    let transform = transform(frame, 700.0);
+    let callback = callback(&preview, &Matrix3::identity(), &transform, "palette").with_fill(0.3);
+    preview.set_colors(&[[0, 0, 255]]);
+    harness.render(std::slice::from_ref(&callback), &[0], frame, 1.0);
+    let before = harness.pixels();
+    assert!(before.chunks_exact(4).any(|p| p[2] > 60));
+    assert!(before.chunks_exact(4).all(|p| p[0] == 0 && p[1] == 0));
+    let id = callback.geometry.id;
+    let buffer = harness.resources.get::<Resources>().unwrap().geometry[&id]
+        .dots
+        .clone();
+    preview.set_colors(&[[255, 255, 0]]);
+    harness.render(&[callback], &[0], frame, 1.0);
+    let after = harness.pixels();
+    assert!(after.chunks_exact(4).any(|p| p[0] > 60 && p[1] > 60));
+    assert!(after.chunks_exact(4).all(|p| p[2] == 0));
+    assert_eq!(
+        buffer,
+        harness.resources.get::<Resources>().unwrap().geometry[&id].dots
+    );
+}
+
+#[test]
+#[ignore = "Requires a native GPU"]
 fn globe_fills_preserve_holes_opacity_and_backface_clipping() {
     let preview = Preview::from_json(br#"{"schema_version":1,"config":{"count":1,"seed":42},"aois":[{"anchor_lon":-90,"anchor_lat":0,"area_km2":1000,"geometry":{"type":"Polygon","coordinates":[[[-94,-4],[-86,-4],[-86,4],[-94,4],[-94,-4]],[[-91,-1],[-91,1],[-89,1],[-89,-1],[-91,-1]]]}}]}"#).unwrap();
     let mut harness = Harness::new();
